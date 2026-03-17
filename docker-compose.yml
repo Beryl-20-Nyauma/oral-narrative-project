@@ -1,0 +1,82 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: oral-narratives-db
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-oral_narratives}
+      POSTGRES_USER: ${POSTGRES_USER:-narrator}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-narrator123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U narrator -d oral_narratives"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend
+
+  redis:
+    image: redis:7-alpine
+    container_name: oral-narratives-redis
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: oral-narratives-api
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://narrator:narrator123@db:5432/oral_narratives
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - DEBUG=true
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./backend:/app
+      - storage_data:/app/storage
+    expose:
+      - "8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+
+  frontend:
+    image: nginx:alpine
+    container_name: oral-narratives-frontend
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend:/usr/share/nginx/html:ro
+    depends_on:
+      - api
+    networks:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:
+  storage_data:
+
+networks:
+  backend:
+    driver: bridge

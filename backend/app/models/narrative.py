@@ -1,0 +1,137 @@
+"""SQLAlchemy models for Oral Narrative Preservation System."""
+
+from sqlalchemy import Column, String, Text, Float, Integer, DateTime, ForeignKey, Table, JSON, Date
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
+from datetime import datetime, date
+import uuid
+
+from app.core.database import Base
+
+
+narrative_themes = Table(
+    'narrative_themes',
+    Base.metadata,
+    Column('narrative_id', UUID(as_uuid=True), ForeignKey('narratives.id', ondelete='CASCADE')),
+    Column('theme_id', Integer, ForeignKey('themes.id', ondelete='CASCADE'))
+)
+
+
+class Narrative(Base):
+    __tablename__ = "narratives"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    status = Column(String(50), default="processing")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    title = Column(String(500), nullable=False)
+    narrator_name = Column(String(255))
+    location = Column(String(255))
+    language = Column(String(10), default="en")
+    duration_sec = Column(Float, default=0.0)
+    date_recorded = Column(Date)
+
+    video_path = Column(Text)
+    audio_path = Column(Text)
+    thumbnail_path = Column(Text)
+    archive_path = Column(Text)
+
+    themes = relationship("Theme", secondary=narrative_themes, back_populates="narratives")
+    transcript = relationship("Transcript", uselist=False, back_populates="narrative")
+    narrator_profile = relationship("NarratorProfile", uselist=False, back_populates="narrative")
+    facial_analysis = relationship("FacialAnalysis", uselist=False, back_populates="narrative")
+    vocal_analysis = relationship("VocalAnalysis", uselist=False, back_populates="narrative")
+    multimodal_fusion = relationship("MultimodalFusion", uselist=False, back_populates="narrative")
+
+
+class Theme(Base):
+    __tablename__ = "themes"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), unique=True, nullable=False)
+    narratives = relationship("Narrative", secondary=narrative_themes, back_populates="themes")
+
+
+class Transcript(Base):
+    __tablename__ = "transcripts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    narrative_id = Column(UUID(as_uuid=True), ForeignKey("narratives.id", ondelete="CASCADE"), unique=True)
+    text = Column(Text)
+    word_count = Column(Integer, default=0)
+    language = Column(String(10), default="en")
+    asr_model = Column(String(100))
+    confidence = Column(Float)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    narrative = relationship("Narrative", back_populates="transcript")
+
+
+class NarratorProfile(Base):
+    __tablename__ = "narrator_profiles"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    narrative_id = Column(UUID(as_uuid=True), ForeignKey("narratives.id", ondelete="CASCADE"), unique=True)
+    identity_hash = Column(String(32))
+    estimated_age = Column(Integer)
+    age_range = Column(String(20))
+    gender = Column(String(50))
+    gender_confidence = Column(Float)
+    detection_confidence = Column(Float)
+    dominant_emotion = Column(String(50))
+    emotion_distribution = Column(JSON)
+    facial_action_units = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    narrative = relationship("Narrative", back_populates="narrator_profile")
+
+
+class FacialAnalysis(Base):
+    __tablename__ = "facial_analysis"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    narrative_id = Column(UUID(as_uuid=True), ForeignKey("narratives.id", ondelete="CASCADE"), unique=True)
+    emotion_timeline = Column(JSON)
+    expression_timeline = Column(JSON)
+    grad_cam_path = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    narrative = relationship("Narrative", back_populates="facial_analysis")
+
+
+class VocalAnalysis(Base):
+    __tablename__ = "vocal_analysis"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    narrative_id = Column(UUID(as_uuid=True), ForeignKey("narratives.id", ondelete="CASCADE"), unique=True)
+    voice_activity_segments = Column(JSON)
+    pitch_timeline = Column(JSON)
+    mean_pitch_hz = Column(Float)
+    pitch_range_min_hz = Column(Float)
+    pitch_range_max_hz = Column(Float)
+    pitch_variability_std = Column(Float)
+    speech_rate_wpm = Column(Float)
+    pause_count = Column(Integer)
+    mean_pause_duration_sec = Column(Float)
+    sample_rate = Column(Integer)
+    snr_db = Column(Float)
+    vocal_emotion_indicators = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    narrative = relationship("Narrative", back_populates="vocal_analysis")
+
+
+class MultimodalFusion(Base):
+    __tablename__ = "multimodal_fusion"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    narrative_id = Column(UUID(as_uuid=True), ForeignKey("narratives.id", ondelete="CASCADE"), unique=True)
+    unified_emotion_timeline = Column(JSON)
+    emotion_congruence = Column(JSON)
+    narrator_vector = Column(JSON)
+    grad_cam_highlights = Column(JSON)
+    fusion_method = Column(String(100))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    narrative = relationship("Narrative", back_populates="multimodal_fusion")
