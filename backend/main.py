@@ -1,7 +1,7 @@
-"""
-Oral Narrative Preservation System - FastAPI Backend
-Multimodal analysis: video, audio, facial features, emotions
-"""
+
+{/*Oral Narrative Preservation System - FastAPI Backend
+Multimodal analysis: video, audio, facial features, emotions*/}
+
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -42,20 +42,18 @@ STORAGE_DIR.mkdir(exist_ok=True)
 # In-memory database (replace with PostgreSQL/MongoDB in production)
 narratives_db: Dict[str, Dict] = {}
 
-
-# ─────────────────────────────────────────────
 # FACIAL ANALYSIS MODULE
-# ─────────────────────────────────────────────
+
 
 def analyze_facial_features(video_path: str) -> Dict[str, Any]:
-    """
-    Analyze facial features from video using OpenCV + DeepFace.
-    Returns per-frame emotion timeline and aggregate narrator profile.
+
+    {/* Analyze facial features from video using OpenCV + DeepFace.
+    Returns per-frame emotion timeline and aggregate narrator profile.*/}
     
     In production: 
         import cv2
         from deepface import DeepFace
-    """
+    
     # Simulated realistic analysis pipeline
     # Replace with actual OpenCV + DeepFace processing
     
@@ -120,19 +118,18 @@ def analyze_facial_features(video_path: str) -> Dict[str, Any]:
     }
 
 
-# ─────────────────────────────────────────────
 # AUDIO ANALYSIS MODULE
-# ─────────────────────────────────────────────
+
 
 def analyze_audio_features(audio_path: str) -> Dict[str, Any]:
-    """
-    Extract vocal features using Librosa + SoundFile + WebRTC-VAD.
+    
+   {/*Extract vocal features using Librosa + SoundFile + WebRTC-VAD.
     
     In production:
         import librosa
         import soundfile as sf
-        import webrtcvad
-    """
+        import webrtcvad*/}
+    
     
     # Simulated Librosa feature extraction
     voice_activity_segments = [
@@ -196,21 +193,20 @@ def analyze_audio_features(audio_path: str) -> Dict[str, Any]:
     }
 
 
-# ─────────────────────────────────────────────
 # MULTIMODAL FUSION MODULE
-# ─────────────────────────────────────────────
+
 
 def fuse_multimodal_features(facial_data: Dict, audio_data: Dict, transcript: str) -> Dict[str, Any]:
-    """
-    Fuse facial + audio + text features using NumPy/pandas/PyTorch.
+    
+    {/*Fuse facial + audio + text features using NumPy/pandas/PyTorch.
     
     In production:
         import numpy as np
         import pandas as pd
         from sklearn.preprocessing import StandardScaler
         import torch
-        from pytorch_grad_cam import GradCAM
-    """
+        from pytorch_grad_cam import GradCAM*/}
+    
     
     # Build synchronized emotion timeline by aligning video + audio timestamps
     unified_timeline = []
@@ -265,13 +261,11 @@ def fuse_multimodal_features(facial_data: Dict, audio_data: Dict, transcript: st
     }
 
 
-# ─────────────────────────────────────────────
 # ARCHIVE BUILDER
-# ─────────────────────────────────────────────
 
 def build_archive_entry(narrative_id: str, metadata: Dict, facial_data: Dict, 
                          audio_data: Dict, fusion_data: Dict) -> Dict[str, Any]:
-    """Build complete multimodal archive entry for permanent storage."""
+    {/*Build complete multimodal archive entry for permanent storage.*/}
     
     return {
         "archive_id": narrative_id,
@@ -346,9 +340,9 @@ def build_archive_entry(narrative_id: str, metadata: Dict, facial_data: Dict,
     }
 
 
-# ─────────────────────────────────────────────
+
 # API ENDPOINTS
-# ─────────────────────────────────────────────
+
 
 @app.get("/")
 async def root():
@@ -363,7 +357,7 @@ async def list_narratives(
     limit: int = 20,
     offset: int = 0
 ):
-    """List all archived narratives with optional filtering."""
+    {/*List all archived narratives with optional filtering.*/}
     results = list(narratives_db.values())
     
     if narrator:
@@ -397,7 +391,7 @@ async def list_narratives(
 
 @app.get("/api/narratives/{narrative_id}")
 async def get_narrative(narrative_id: str):
-    """Get complete archive entry for a narrative."""
+    {/*Get complete archive entry for a narrative.*/}
     if narrative_id not in narratives_db:
         raise HTTPException(status_code=404, detail="Narrative not found")
     return narratives_db[narrative_id]
@@ -414,9 +408,7 @@ async def upload_narrative(
     themes: str = "",
     transcript: str = ""
 ):
-    """
-    Upload a video narrative and trigger full multimodal analysis pipeline.
-    """
+    {/*Upload a video narrative and trigger full multimodal analysis pipeline.*/}
     narrative_id = str(uuid.uuid4())
     
     # Save uploaded file
@@ -456,7 +448,7 @@ async def upload_narrative(
 
 @app.get("/api/narratives/{narrative_id}/status")
 async def get_processing_status(narrative_id: str):
-    """Check processing status of a narrative."""
+    {/*Check processing status of a narrative.*/}
     if narrative_id not in narratives_db:
         raise HTTPException(status_code=404, detail="Narrative not found")
     
@@ -471,7 +463,7 @@ async def get_processing_status(narrative_id: str):
 
 @app.get("/api/narratives/{narrative_id}/emotion-timeline")
 async def get_emotion_timeline(narrative_id: str):
-    """Get synchronized emotion timeline for a narrative."""
+    {/*Get synchronized emotion timeline for a narrative.*/}
     if narrative_id not in narratives_db:
         raise HTTPException(status_code=404, detail="Narrative not found")
     
@@ -489,7 +481,7 @@ async def get_emotion_timeline(narrative_id: str):
 
 @app.get("/api/narratives/{narrative_id}/narrator-profile")
 async def get_narrator_profile(narrative_id: str):
-    """Get extracted narrator identity and vocal profile."""
+    {/*Get extracted narrator identity and vocal profile.*/}
     if narrative_id not in narratives_db:
         raise HTTPException(status_code=404, detail="Narrative not found")
     
@@ -507,7 +499,7 @@ async def get_narrator_profile(narrative_id: str):
 
 @app.get("/api/search")
 async def search_narratives(q: str, field: str = "all"):
-    """Full-text search across narratives by narrator, emotion, theme, or keyword."""
+    {/*Full-text search across narratives by narrator, emotion, theme, or keyword.*/}
     results = []
     q_lower = q.lower()
     
@@ -541,7 +533,7 @@ async def search_narratives(q: str, field: str = "all"):
 
 @app.get("/api/stats")
 async def get_system_stats():
-    """Get system-wide statistics."""
+    {/*Get system-wide statistics.*/}
     complete = [n for n in narratives_db.values() if n.get("status") == "complete"]
     
     emotion_counts = {}
@@ -561,12 +553,12 @@ async def get_system_stats():
     }
 
 
-# ─────────────────────────────────────────────
+
 # BACKGROUND PROCESSING PIPELINE
-# ─────────────────────────────────────────────
+
 
 async def process_narrative(narrative_id: str, video_path: str, metadata: Dict):
-    """Full multimodal processing pipeline."""
+    {/*Full multimodal processing pipeline.*/}
     try:
         # Update progress
         narratives_db[narrative_id]["progress"] = {"stage": "facial_analysis", "pct": 10}
@@ -606,12 +598,11 @@ async def process_narrative(narrative_id: str, video_path: str, metadata: Dict):
         narratives_db[narrative_id]["error"] = str(e)
 
 
-# ─────────────────────────────────────────────
 # SEED DEMO DATA
-# ─────────────────────────────────────────────
+
 
 async def seed_demo_data():
-    """Seed with realistic demo narratives for UI demonstration."""
+    {/*Seed with realistic demo narratives for UI demonstration.*/}
     demo_narratives = [
         {
             "title": "The Day the River Flooded",
