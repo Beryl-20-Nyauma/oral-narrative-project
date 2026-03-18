@@ -15,13 +15,13 @@ deepface>=0.0.92          # Facial attribute analysis (emotion, age, gender, ide
 librosa>=0.10.1           # Pitch, MFCC, spectral features, chroma
 soundfile>=0.12.1         # Audio I/O
 webrtcvad>=2.0.10         # Voice Activity Detection
-pyaudio>=0.2.14           # Real-time audio capture (optional)
+# pyaudio>=0.2.14        # Real-time audio capture (requires PortAudio system lib - install separately if needed)
 
 # ── Machine Learning ───────────────────────────────────────
 torch>=2.2.0              # PyTorch for multimodal fusion model
 torchvision>=0.17.0       # Vision transforms
 torchaudio>=2.2.0         # Audio transforms
-pytorch-grad-cam>=1.5.0   # Gradient-weighted CAM visualization
+grad-cam>=1.5.0           # Gradient-weighted CAM visualization
 scikit-learn>=1.4.0       # Feature engineering, preprocessing, scaling
 numpy>=1.26.0
 pandas>=2.2.0
@@ -29,8 +29,11 @@ pandas>=2.2.0
 # ── Database & Storage ─────────────────────────────────────
 sqlalchemy>=2.0.0         # ORM (production: replace in-memory dict)
 alembic>=1.13.0           # DB migrations
+psycopg2-binary>=2.9.9    # PostgreSQL adapter
+asyncpg>=0.29.0           # Async PostgreSQL driver
 pymongo>=4.6.0            # MongoDB (optional: for document storage)
 redis>=5.0.0              # Caching layer (optional)
+aiosqlite>=0.19.0         # Async SQLite (for testing)
 
 # ── Speech Recognition ─────────────────────────────────────
 openai-whisper>=20231117  # ASR transcription
@@ -38,6 +41,8 @@ openai-whisper>=20231117  # ASR transcription
 
 # ── Utilities ──────────────────────────────────────────────
 pydantic>=2.5.0
+pydantic-settings>=2.1.0   # Environment config
+python-dotenv>=1.0.0       # .env file loading
 python-jose>=3.3.0        # JWT auth tokens
 passlib>=1.7.4            # Password hashing
 httpx>=0.27.0

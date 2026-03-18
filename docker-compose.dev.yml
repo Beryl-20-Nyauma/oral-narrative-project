@@ -1,0 +1,18 @@
+# Development override - faster builds without ML dependencies
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./backend:/app
+      - ./frontend:/frontend:ro
+    environment:
+      - DATABASE_URL=postgresql://narrator:narrator123@db:5432/oral_narratives
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=dev-secret-key
+      - DEBUG=true
+      - FRONTEND_PATH=/frontend
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
