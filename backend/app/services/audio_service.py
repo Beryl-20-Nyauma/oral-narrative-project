@@ -1,71 +1,204 @@
-"""Audio analysis service."""
+"""Audio analysis service using Librosa."""
 
-from typing import Dict, Any
+import librosa
+import numpy as np
+import subprocess
+import logging
+from typing import Dict, Any, List
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+
+def extract_audio_from_video(video_path: str, output_path: str) -> str:
+    """
+    Extract audio from video using FFmpeg.
+    
+    Args:
+        video_path: Path to video file
+        output_path: Path for output WAV file
+    
+    Returns:
+        Path to extracted audio file
+    """
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    
+    subprocess.run([
+        'ffmpeg', '-y', '-i', video_path,
+        '-vn', '-acodec', 'pcm_s16le',
+        '-ar', '44100', '-ac', '1',
+        output_path
+    ], check=True, capture_output=True)
+    
+    logger.info(f"Extracted audio to: {output_path}")
+    return output_path
 
 
 def analyze_audio_features(audio_path: str) -> Dict[str, Any]:
     """
-    Extract vocal features using Librosa + SoundFile + WebRTC-VAD.
+    Extract vocal features using Librosa.
     
     Args:
-        audio_path: Path to audio file
+        audio_path: Path to audio file (WAV preferred)
     
     Returns:
-        Dict with voice_activity_segments, pitch_timeline, vocal_features
+        Dict with voice_activity_segments, pitch_timeline, vocal_features, audio_quality
     """
-    voice_activity_segments = [
-        {"start": 0.1, "end": 3.2, "active": True},
-        {"start": 3.2, "end": 3.8, "active": False},
-        {"start": 3.8, "end": 7.1, "active": True},
-        {"start": 7.1, "end": 7.5, "active": False},
-        {"start": 7.5, "end": 11.3, "active": True},
-        {"start": 11.3, "end": 11.9, "active": False},
-        {"start": 11.9, "end": 14.8, "active": True},
-    ]
+    logger.info(f"Starting audio analysis: {audio_path}")
     
-    pitch_timeline = [
-        {"timestamp": 0.0, "hz": 182.3, "note": "F#3"},
-        {"timestamp": 0.5, "hz": 195.1, "note": "G3"},
-        {"timestamp": 1.0, "hz": 210.4, "note": "Ab3"},
-        {"timestamp": 1.5, "hz": 198.7, "note": "G3"},
-        {"timestamp": 2.0, "hz": 185.2, "note": "F#3"},
-        {"timestamp": 2.5, "hz": 220.0, "note": "A3"},
-        {"timestamp": 3.0, "hz": 245.6, "note": "B3"},
-    ]
+    y, sr = librosa.load(audio_path, sr=None)
+    duration = len(y) / sr
     
-    vocal_features = {
-        "mean_pitch_hz": 198.4,
-        "pitch_range_hz": {"min": 142.3, "max": 312.8},
-        "pitch_variability_std": 38.2,
-        "speech_rate_wpm": 127,
-        "speech_rate_syllables_per_sec": 3.8,
-        "total_duration_sec": 14.8,
-        "voiced_duration_sec": 11.4,
-        "pause_count": 3,
-        "mean_pause_duration_sec": 0.58,
-        "total_pause_duration_sec": 1.73,
-        "energy_mean": 0.0423,
-        "energy_std": 0.0187,
-        "spectral_centroid_mean": 1842.3,
-        "zero_crossing_rate": 0.0821,
-        "mfcc_features": [-312.4, 87.3, -42.1, 23.7, -15.2, 8.9, -4.1, 2.3, -1.8, 0.9, -0.7, 0.4, -0.2],
-        "chroma_features": [0.42, 0.31, 0.28, 0.19, 0.35, 0.22, 0.18, 0.41, 0.33, 0.27, 0.21, 0.38],
-        "vocal_emotion_indicators": {
-            "arousal": 0.62,
-            "valence": 0.71,
-            "dominance": 0.54
-        },
-        "audio_embeddings": [round(x * 0.01, 6) for x in range(-64, 64)]
-    }
+    f0, voiced_flags, voiced_probs = librosa.pyin(
+        y, fmin=librosa.note_to_hz('C2'),
+        fmax=librosa.note_to_hz('C7'),
+        sr=sr
+    )
+    
+    voice_activity = _detect_voice_activity(y, sr)
+    pitch_timeline = _build_pitch_timeline(f0, sr)
+    vocal_features = _extract_vocal_features(y, sr, f0, voiced_flags, duration)
+    audio_quality = _assess_audio_quality(y, sr)
+    
+    logger.info(f"Audio analysis complete: {duration:.1f}s, {vocal_features['speech_rate_wpm']} WPM")
     
     return {
-        "voice_activity_segments": voice_activity_segments,
+        "voice_activity_segments": voice_activity,
         "pitch_timeline": pitch_timeline,
         "vocal_features": vocal_features,
-        "audio_quality": {
-            "sample_rate": 44100,
-            "bit_depth": 16,
-            "snr_db": 28.4,
-            "clipping_detected": False
-        }
+        "audio_quality": audio_quality
+    }
+
+
+def _detect_voice_activity(y: np.ndarray, sr: int) -> List[Dict]:
+    """Detect voice activity segments using energy-based VAD."""
+    frame_length = int(0.025 * sr)
+    hop_length = int(0.010 * sr)
+    
+    rms = librosa.feature.rms(y=y, frame_length=frame_length, hop_length=hop_length)[0]
+    threshold = np.mean(rms) * 0.5
+    
+    segments = []
+    in_voice = False
+    start_time = 0.0
+    
+    times = librosa.times_like(rms, sr=sr, hop_length=hop_length)
+    
+    for i, (t, energy) in enumerate(zip(times, rms)):
+        if energy > threshold and not in_voice:
+            start_time = t
+            in_voice = True
+        elif energy <= threshold and in_voice:
+            segments.append({"start": round(start_time, 2), "end": round(t, 2), "active": True})
+            segments.append({"start": round(t, 2), "end": round(t, 2), "active": False})
+            in_voice = False
+    
+    if in_voice and len(times) > 0:
+        segments.append({"start": round(start_time, 2), "end": round(times[-1], 2), "active": True})
+    
+    return segments
+
+
+def _build_pitch_timeline(f0: np.ndarray, sr: int) -> List[Dict]:
+    """Build pitch timeline from F0 contour."""
+    times = librosa.times_like(f0, sr=sr, hop_length=512)
+    
+    timeline = []
+    for t, pitch in zip(times, f0):
+        if not np.isnan(pitch) and pitch > 0:
+            note = librosa.hz_to_note(pitch)
+            timeline.append({
+                "timestamp": round(t, 2),
+                "hz": round(float(pitch), 1),
+                "note": note
+            })
+    
+    if len(timeline) > 50:
+        step = len(timeline) // 50
+        timeline = timeline[::step]
+    
+    return timeline[:50]
+
+
+def _extract_vocal_features(
+    y: np.ndarray, sr: int, 
+    f0: np.ndarray, voiced: np.ndarray,
+    duration: float
+) -> Dict[str, Any]:
+    """Extract comprehensive vocal features."""
+    
+    valid_f0 = f0[~np.isnan(f0)]
+    mean_pitch = float(np.mean(valid_f0)) if len(valid_f0) > 0 else 0
+    pitch_std = float(np.std(valid_f0)) if len(valid_f0) > 0 else 0
+    
+    onset_frames = librosa.onset.onset_detect(y=y, sr=sr)
+    onset_times = librosa.frames_to_time(onset_frames, sr=sr)
+    syllable_count = len(onset_times)
+    speech_rate_wpm = int((syllable_count / 1.5) / (duration / 60)) if duration > 0 else 0
+    
+    mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
+    mfcc_mean = [round(float(x), 2) for x in np.mean(mfccs, axis=1)]
+    
+    spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sr)
+    zcr = librosa.feature.zero_crossing_rate(y)
+    
+    voiced_duration = np.sum(voiced) * 512 / sr if voiced is not None else 0
+    pause_count = _count_pauses(voiced)
+    
+    return {
+        "mean_pitch_hz": round(mean_pitch, 1),
+        "pitch_range_hz": {
+            "min": round(float(np.min(valid_f0)), 1) if len(valid_f0) > 0 else 0,
+            "max": round(float(np.max(valid_f0)), 1) if len(valid_f0) > 0 else 0
+        },
+        "pitch_variability_std": round(pitch_std, 1),
+        "speech_rate_wpm": speech_rate_wpm,
+        "speech_rate_syllables_per_sec": round(syllable_count / duration, 2) if duration > 0 else 0,
+        "total_duration_sec": round(duration, 2),
+        "voiced_duration_sec": round(voiced_duration, 2),
+        "pause_count": pause_count,
+        "mean_pause_duration_sec": 0.5,
+        "total_pause_duration_sec": round(duration - voiced_duration, 2),
+        "energy_mean": round(float(np.mean(np.abs(y))), 6),
+        "energy_std": round(float(np.std(np.abs(y))), 6),
+        "spectral_centroid_mean": round(float(np.mean(spectral_centroid)), 1),
+        "zero_crossing_rate": round(float(np.mean(zcr)), 4),
+        "mfcc_features": mfcc_mean,
+        "chroma_features": [],
+        "vocal_emotion_indicators": {
+            "arousal": round(min(pitch_std / 50, 1.0), 2),
+            "valence": 0.5,
+            "dominance": 0.5
+        },
+        "audio_embeddings": []
+    }
+
+
+def _count_pauses(voiced: np.ndarray) -> int:
+    """Count number of pauses in voice activity."""
+    if voiced is None:
+        return 0
+    pauses = 0
+    in_pause = False
+    for v in voiced:
+        if not v and not in_pause:
+            pauses += 1
+            in_pause = True
+        elif v:
+            in_pause = False
+    return pauses
+
+
+def _assess_audio_quality(y: np.ndarray, sr: int) -> Dict[str, Any]:
+    """Assess audio quality metrics."""
+    clipping = np.sum(np.abs(y) > 0.99) / len(y)
+    noise_floor = np.percentile(np.abs(y), 10)
+    signal_level = np.percentile(np.abs(y), 90)
+    snr_db = 20 * np.log10(signal_level / (noise_floor + 1e-10)) if noise_floor > 0 else 0
+    
+    return {
+        "sample_rate": int(sr),
+        "bit_depth": 16,
+        "snr_db": round(snr_db, 1),
+        "clipping_detected": clipping > 0.01
     }

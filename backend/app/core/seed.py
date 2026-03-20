@@ -1,4 +1,4 @@
-"""Database seeding for demo narratives."""
+"""Database seeding for sample narratives."""
 
 import asyncio
 from datetime import date, datetime
@@ -15,7 +15,7 @@ from app.services.audio_service import analyze_audio_features
 from app.services.fusion_service import fuse_multimodal_features
 
 
-DEMO_NARRATIVE_IDS = [
+SAMPLE_NARRATIVE_IDS = [
     UUID("00000001-0000-0000-0000-000000000001"),
     UUID("00000002-0000-0000-0000-000000000001"),
     UUID("00000003-0000-0000-0000-000000000001"),
@@ -23,7 +23,7 @@ DEMO_NARRATIVE_IDS = [
     UUID("00000005-0000-0000-0000-000000000001"),
 ]
 
-DEMO_NARRATIVES = [
+SAMPLE_NARRATIVES = [
     {
         "title": "The Day the River Flooded",
         "narrator_name": "Kirongosi A",
@@ -93,7 +93,7 @@ async def seed_themes(db: AsyncSession) -> dict:
 
 async def seed_narrative(
     db: AsyncSession,
-    demo_data: dict,
+    sample_data: dict,
     narrative_id: UUID,
     theme_map: dict
 ) -> Narrative:
@@ -107,15 +107,15 @@ async def seed_narrative(
     narrative = Narrative(
         id=narrative_id,
         status="complete",
-        title=demo_data["title"],
-        narrator_name=demo_data["narrator_name"],
-        location=demo_data["location"],
+        title=sample_data["title"],
+        narrator_name=sample_data["narrator_name"],
+        location=sample_data["location"],
         language="en",
         duration_sec=14.8,
-        date_recorded=demo_data["date_recorded"],
+        date_recorded=sample_data["date_recorded"],
     )
     
-    for theme_name in demo_data["themes"]:
+    for theme_name in sample_data["themes"]:
         if theme_name in theme_map:
             narrative.themes.append(theme_map[theme_name])
     
@@ -124,14 +124,14 @@ async def seed_narrative(
     
     transcript = Transcript(
         narrative_id=narrative_id,
-        text=demo_data["transcript"],
-        word_count=len(demo_data["transcript"].split()),
+        text=sample_data["transcript"],
+        word_count=len(sample_data["transcript"].split()),
         asr_model="whisper-large-v3",
         confidence=0.92,
     )
     db.add(transcript)
     
-    facial_data = analyze_facial_features("demo.mp4")
+    facial_data = analyze_facial_features("sample.mp4")
     profile_data = facial_data["narrator_profile"]
     
     narrator_profile = NarratorProfile(
@@ -156,7 +156,7 @@ async def seed_narrative(
     )
     db.add(facial_analysis)
     
-    audio_data = analyze_audio_features("demo.wav")
+    audio_data = analyze_audio_features("sample.wav")
     vocal_features = audio_data["vocal_features"]
     
     vocal_analysis = VocalAnalysis(
@@ -176,7 +176,7 @@ async def seed_narrative(
     )
     db.add(vocal_analysis)
     
-    fusion_data = fuse_multimodal_features(facial_data, audio_data, demo_data["transcript"])
+    fusion_data = fuse_multimodal_features(facial_data, audio_data, sample_data["transcript"])
     
     multimodal_fusion = MultimodalFusion(
         narrative_id=narrative_id,
@@ -193,12 +193,13 @@ async def seed_narrative(
 
 
 async def seed_database(db: AsyncSession) -> int:
-    """Seed all demo data. Returns count of narratives seeded."""
-    theme_map = await seed_themes(db)
+    """Seed all sample data. Returns count of narratives seeded."""
     
+    theme_map = await seed_themes(db)
     count = 0
-    for i, demo_data in enumerate(DEMO_NARRATIVES):
-        narrative = await seed_narrative(db, demo_data, DEMO_NARRATIVE_IDS[i], theme_map)
+    
+    for i, sample_data in enumerate(SAMPLE_NARRATIVES):
+        narrative = await seed_narrative(db, sample_data, SAMPLE_NARRATIVE_IDS[i], theme_map)
         if narrative:
             count += 1
     
@@ -206,6 +207,6 @@ async def seed_database(db: AsyncSession) -> int:
 
 
 async def is_database_seeded(db: AsyncSession) -> bool:
-    """Check if database already has demo data."""
+    """Check if database already has sample data."""
     result = await db.execute(select(Narrative).limit(1))
     return result.scalar_one_or_none() is not None

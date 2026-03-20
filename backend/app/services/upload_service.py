@@ -1,28 +1,30 @@
 """Business logic for upload operations."""
 
-from fastapi import UploadFile, BackgroundTasks
+import logging
+from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import Dict, Any
+from typing import Dict, Any, Optional, Tuple
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import date
 import uuid
-import json
-import asyncio
+import os
 
 from config import get_settings
-from app.models.narrative import (
-    Narrative, Theme, Transcript, NarratorProfile,
-    FacialAnalysis, VocalAnalysis, MultimodalFusion
-)
+from app.models.narrative import Narrative, Theme
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 STORAGE_DIR = Path(settings.storage_dir)
 
+ALLOWED_VIDEO_FORMATS = {'.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv'}
+MAX_VIDEO_SIZE_MB = settings.max_upload_size_mb
+MIN_DURATION_SEC = 2
+
 
 async def process_upload(
     db: AsyncSession,
-    background_tasks: BackgroundTasks,
     video: UploadFile,
     title: str,
     narrator_name: str,
@@ -32,11 +34,10 @@ async def process_upload(
     transcript: str
 ) -> Dict[str, Any]:
     """
-    Process video upload and trigger analysis pipeline.
+    Process video upload and trigger Celery analysis pipeline.
     
     Args:
         db: Database session
-        background_tasks: FastAPI background task manager
         video: Uploaded video file
         title: Narrative title
         narrator_name: Name of storyteller
@@ -46,42 +47,53 @@ async def process_upload(
         transcript: Optional transcript
     
     Returns:
-        Dict with narrative_id and status
+        Dict with narrative_id, status, and task_id
     """
     narrative_id = str(uuid.uuid4())
     
-    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
-    (STORAGE_DIR / "videos").mkdir(exist_ok=True)
-    (STORAGE_DIR / "audio").mkdir(exist_ok=True)
-    (STORAGE_DIR / "archives").mkdir(exist_ok=True)
-    (STORAGE_DIR / "thumbnails").mkdir(exist_ok=True)
+    _ensure_storage_dirs()
     
     video_path = STORAGE_DIR / "videos" / f"{narrative_id}.mp4"
+    
     content = await video.read()
+    
+    validation_error = validate_video_upload(content, video.filename or "")
+    if validation_error:
+        return {
+            "narrative_id": None,
+            "status": "rejected",
+            "error": validation_error
+        }
+    
     with open(video_path, "wb") as f:
         f.write(content)
+    
+    logger.info(f"Saved video to {video_path} ({len(content)} bytes)")
     
     theme_names = [t.strip() for t in themes.split(",") if t.strip()]
     theme_objs = await _get_or_create_themes(db, theme_names)
     
     narrative = Narrative(
         id=narrative_id,
-        status="processing",
+        status="pending",
         title=title,
         narrator_name=narrator_name,
         location=location,
         language=language,
         duration_sec=0.0,
-        date_recorded=datetime.now(timezone.utc).date().isoformat(),
+        date_recorded=date.today(),
         video_path=str(video_path),
+        processing_progress=0,
+        processing_stage="queued",
     )
     narrative.themes = theme_objs
     
     db.add(narrative)
     await db.commit()
     
-    background_tasks.add_task(
-        run_analysis_pipeline,
+    from app.core.tasks import process_video_task
+    
+    task = process_video_task.delay(
         narrative_id,
         str(video_path),
         {
@@ -94,18 +106,69 @@ async def process_upload(
         }
     )
     
+    narrative.celery_task_id = task.id
+    await db.commit()
+    
+    logger.info(f"Started Celery task {task.id} for narrative {narrative_id}")
+    
     return {
         "narrative_id": narrative_id,
-        "status": "processing",
-        "message": "Narrative uploaded. Multimodal analysis in progress.",
-        "estimated_completion_sec": 30
+        "status": "pending",
+        "task_id": task.id,
+        "message": "Narrative uploaded. Processing queued.",
+        "status_url": f"/api/narratives/{narrative_id}/status"
     }
+
+
+def validate_video_upload(content: bytes, filename: str) -> Optional[str]:
+    """
+    Validate uploaded video file.
+    
+    Args:
+        content: Raw file bytes
+        filename: Original filename
+    
+    Returns:
+        Error message if validation fails, None if valid
+    """
+    if not content:
+        return "Empty file uploaded"
+    
+    file_size_mb = len(content) / (1024 * 1024)
+    if file_size_mb > MAX_VIDEO_SIZE_MB:
+        return f"File too large: {file_size_mb:.1f}MB (max {MAX_VIDEO_SIZE_MB}MB)"
+    
+    ext = os.path.splitext(filename)[1].lower()
+    if ext and ext not in ALLOWED_VIDEO_FORMATS:
+        return f"Invalid format: {ext}. Allowed: {', '.join(ALLOWED_VIDEO_FORMATS)}"
+    
+    video_signatures = [
+        b'\x00\x00\x00\x1cftyp',
+        b'\x00\x00\x00\x20ftyp',
+        b'ftyp',
+        b'\x1aE\xdf\xa3',
+        b'RIFF',
+        b'\x00\x00\x01\x00',
+    ]
+    
+    is_valid_video = any(sig in content[:100] for sig in video_signatures)
+    if not is_valid_video and len(content) > 1000:
+        logger.warning(f"Video signature not recognized for {filename}")
+    
+    return None
+
+
+def _ensure_storage_dirs():
+    """Create storage directories if they don't exist."""
+    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+    (STORAGE_DIR / "videos").mkdir(exist_ok=True)
+    (STORAGE_DIR / "audio").mkdir(exist_ok=True)
+    (STORAGE_DIR / "archives").mkdir(exist_ok=True)
+    (STORAGE_DIR / "thumbnails").mkdir(exist_ok=True)
 
 
 async def _get_or_create_themes(db: AsyncSession, theme_names: list) -> list:
     """Get or create theme objects."""
-    from app.models.narrative import Theme
-    
     themes = []
     for name in theme_names:
         result = await db.execute(select(Theme).where(Theme.name == name))
@@ -118,133 +181,80 @@ async def _get_or_create_themes(db: AsyncSession, theme_names: list) -> list:
     return themes
 
 
-async def run_analysis_pipeline(
-    narrative_id: str,
-    video_path: str,
-    metadata: Dict
-) -> None:
+async def get_task_status(task_id: str) -> Dict[str, Any]:
     """
-    Run full multimodal analysis pipeline.
+    Get Celery task status.
     
     Args:
-        narrative_id: UUID of narrative
-        video_path: Path to video file
-        metadata: Narrative metadata
+        task_id: Celery task ID
+    
+    Returns:
+        Dict with task status info
     """
-    from app.core.database import async_session_factory
+    from app.core.celery_app import celery_app
     
-    if async_session_factory is None:
-        return
+    result = celery_app.AsyncResult(task_id)
     
-    async with async_session_factory() as db:
-        try:
-            result = await db.execute(
-                select(Narrative).where(Narrative.id == narrative_id)
-            )
-            narrative = result.scalar_one_or_none()
-            
-            if not narrative:
-                return
-            
-            await asyncio.sleep(1)
-            
-            facial_data = _analyze_facial_features(video_path)
-            await asyncio.sleep(1)
-            
-            audio_path = video_path.replace("/videos/", "/audio/").replace(".mp4", ".wav")
-            audio_data = _analyze_audio_features(audio_path)
-            await asyncio.sleep(1)
-            
-            fusion_data = _fuse_multimodal_features(
-                facial_data, audio_data, metadata.get("transcript", "")
-            )
-            await asyncio.sleep(0.5)
-            
-            profile_data = facial_data["narrator_profile"]
-            narrator_profile = NarratorProfile(
-                narrative_id=narrative_id,
-                identity_hash=f"hash-{narrative_id}",
-                estimated_age=profile_data["estimated_age"],
-                age_range=profile_data["age_range"],
-                gender=profile_data["gender"],
-                gender_confidence=profile_data["gender_confidence"],
-                detection_confidence=profile_data["detection_confidence"],
-                dominant_emotion=profile_data["dominant_emotion_overall"],
-                emotion_distribution=profile_data["emotion_distribution"],
-                facial_action_units=profile_data["facial_action_units"],
-            )
-            db.add(narrator_profile)
-            
-            facial_analysis = FacialAnalysis(
-                narrative_id=narrative_id,
-                emotion_timeline=facial_data["emotion_timeline"],
-                expression_timeline=facial_data["expression_timeline"],
-                grad_cam_path=facial_data.get("grad_cam_path"),
-            )
-            db.add(facial_analysis)
-            
-            vocal_features = audio_data["vocal_features"]
-            vocal_analysis = VocalAnalysis(
-                narrative_id=narrative_id,
-                voice_activity_segments=audio_data["voice_activity_segments"],
-                pitch_timeline=audio_data["pitch_timeline"],
-                mean_pitch_hz=vocal_features["mean_pitch_hz"],
-                pitch_range_min_hz=vocal_features["pitch_range_hz"]["min"],
-                pitch_range_max_hz=vocal_features["pitch_range_hz"]["max"],
-                pitch_variability_std=vocal_features["pitch_variability_std"],
-                speech_rate_wpm=vocal_features["speech_rate_wpm"],
-                pause_count=vocal_features["pause_count"],
-                mean_pause_duration_sec=vocal_features["mean_pause_duration_sec"],
-                sample_rate=audio_data["audio_quality"]["sample_rate"],
-                snr_db=audio_data["audio_quality"]["snr_db"],
-                vocal_emotion_indicators=vocal_features["vocal_emotion_indicators"],
-            )
-            db.add(vocal_analysis)
-            
-            multimodal_fusion = MultimodalFusion(
-                narrative_id=narrative_id,
-                unified_emotion_timeline=fusion_data["unified_emotion_timeline"],
-                emotion_congruence=fusion_data["emotion_congruence"],
-                narrator_vector=fusion_data["narrator_vector"],
-                grad_cam_highlights=fusion_data["grad_cam_highlights"],
-                fusion_method=fusion_data["fusion_method"],
-            )
-            db.add(multimodal_fusion)
-            
-            if metadata.get("transcript"):
-                transcript = Transcript(
-                    narrative_id=narrative_id,
-                    text=metadata["transcript"],
-                    word_count=len(metadata["transcript"].split()),
-                    asr_model="manual",
-                    confidence=1.0,
-                )
-                db.add(transcript)
-            
-            narrative.status = "complete"
-            narrative.duration_sec = 14.8
-            
-            await db.commit()
-            
-        except Exception as e:
-            narrative.status = "error"
-            await db.commit()
-            raise
+    return {
+        "task_id": task_id,
+        "status": result.status,
+        "result": result.result if result.ready() else None,
+        "error": str(result.result) if result.failed() else None,
+    }
 
 
-def _analyze_facial_features(video_path: str) -> Dict[str, Any]:
-    """Placeholder for facial analysis."""
-    from app.services.facial_service import analyze_facial_features
-    return analyze_facial_features(video_path)
-
-
-def _analyze_audio_features(audio_path: str) -> Dict[str, Any]:
-    """Placeholder for audio analysis."""
-    from app.services.audio_service import analyze_audio_features
-    return analyze_audio_features(audio_path)
-
-
-def _fuse_multimodal_features(facial_data: Dict, audio_data: Dict, transcript: str) -> Dict[str, Any]:
-    """Placeholder for multimodal fusion."""
-    from app.services.fusion_service import fuse_multimodal_features
-    return fuse_multimodal_features(facial_data, audio_data, transcript)
+async def retry_failed_task(narrative_id: str, db: AsyncSession) -> Dict[str, Any]:
+    """
+    Retry a failed processing task.
+    
+    Args:
+        narrative_id: UUID of the narrative
+        db: Database session
+    
+    Returns:
+        Dict with new task info
+    """
+    nid = uuid.UUID(narrative_id) if isinstance(narrative_id, str) else narrative_id
+    result = await db.execute(
+        select(Narrative).where(Narrative.id == nid)
+    )
+    narrative = result.scalar_one_or_none()
+    
+    if not narrative:
+        return {"error": "Narrative not found"}
+    
+    if narrative.status != "error":
+        return {"error": f"Cannot retry: status is '{narrative.status}'"}
+    
+    if not narrative.video_path:
+        return {"error": "No video path found"}
+    
+    from app.core.tasks import process_video_task
+    
+    narrative.status = "pending"
+    narrative.processing_progress = 0
+    narrative.processing_stage = "queued"
+    narrative.processing_error = None
+    
+    task = process_video_task.delay(
+        narrative_id,
+        narrative.video_path,
+        {
+            "title": narrative.title,
+            "narrator_name": narrative.narrator_name,
+            "location": narrative.location or "",
+            "language": narrative.language or "en",
+            "themes": [t.name for t in narrative.themes] if narrative.themes else [],
+            "transcript": "",
+        }
+    )
+    
+    narrative.celery_task_id = task.id
+    await db.commit()
+    
+    return {
+        "narrative_id": narrative_id,
+        "task_id": task.id,
+        "status": "retried",
+        "message": "Processing restarted"
+    }

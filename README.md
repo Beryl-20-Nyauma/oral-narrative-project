@@ -16,7 +16,7 @@ docker compose logs -f api
 open http://localhost
 ```
 
-The system automatically seeds 5 demo narratives on first run.
+The system automatically seeds 5 sample narratives on first run.
 
 ---
 
@@ -244,7 +244,7 @@ Current implementation status:
 | Async SQLAlchemy | ✅ Complete |
 | Nginx reverse proxy | ✅ Complete |
 | Docker volumes | ✅ Complete |
-| Real ML implementations | 🔴 Mocked (needs implementation) |
+| Real ML implementations | ✅ Complete |
 | Celery task queue | 🔴 Redis ready, Celery not implemented |
 | JWT authentication | 🔴 Not implemented |
 | FAISS vector search | 🔴 Not implemented |

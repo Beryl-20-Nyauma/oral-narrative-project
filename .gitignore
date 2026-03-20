@@ -36,5 +36,9 @@ docker-compose.override.yml
 # Storage (runtime)
 backend/storage/
 
+# Test fixtures (generated)
+backend/tests/fixtures/*.wav
+backend/tests/fixtures/*.mp4
+
 # AGENTS.md (AI coding assistant guidelines - not for production)
 AGENTS.md
