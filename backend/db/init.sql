@@ -2,10 +2,37 @@
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Users table
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    hashed_password VARCHAR(255) NOT NULL,
+    full_name VARCHAR(255),
+    is_active BOOLEAN DEFAULT TRUE,
+    is_admin BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    last_login TIMESTAMPTZ
+);
+
+CREATE INDEX idx_users_email ON users(email);
+
+-- Narrators table (auto-populated by face recognition)
+CREATE TABLE narrators (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) DEFAULT 'Unknown',
+    face_embedding JSONB,
+    reference_image_path TEXT,
+    first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+    last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+    narrative_count INTEGER DEFAULT 0,
+    named_by_user BOOLEAN DEFAULT FALSE,
+    extra_data JSONB
+);
+
 -- Narratives table
 CREATE TABLE narratives (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    status VARCHAR(50) DEFAULT 'processing',
+    status VARCHAR(50) DEFAULT 'pending',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     
@@ -21,7 +48,17 @@ CREATE TABLE narratives (
     video_path TEXT,
     audio_path TEXT,
     thumbnail_path TEXT,
-    archive_path TEXT
+    archive_path TEXT,
+    
+    -- Processing status
+    processing_progress INTEGER DEFAULT 0,
+    processing_stage VARCHAR(100) DEFAULT 'queued',
+    processing_error TEXT,
+    celery_task_id VARCHAR(100),
+    
+    -- Narrator identification
+    narrator_id UUID REFERENCES narrators(id) ON DELETE SET NULL,
+    narrator_match_confidence FLOAT
 );
 
 -- Themes (many-to-many)

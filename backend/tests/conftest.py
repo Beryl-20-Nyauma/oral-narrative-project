@@ -15,8 +15,10 @@ from sqlalchemy.pool import StaticPool
 from app.core.database import Base
 from app.models.narrative import (
     Narrative, Theme, NarratorProfile, FacialAnalysis,
-    VocalAnalysis, MultimodalFusion, Transcript
+    VocalAnalysis, MultimodalFusion, Transcript, User, Narrator
 )
+import uuid
+from datetime import date
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -49,18 +51,21 @@ async def db_session():
         await conn.run_sync(Base.metadata.drop_all)
 
 
+TEST_NARRATIVE_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+
 @pytest.fixture
 async def sample_narrative(db_session):
     """Create a sample narrative for testing."""
     narrative = Narrative(
-        id="test-0001",
+        id=TEST_NARRATIVE_ID,
         status="complete",
         title="Test Narrative",
         narrator_name="Test Narrator",
         location="Test Location",
         language="en",
         duration_sec=14.8,
-        date_recorded="2024-01-15",
+        date_recorded=date(2024, 1, 15),
     )
     
     theme1 = Theme(name="memory")
@@ -71,7 +76,7 @@ async def sample_narrative(db_session):
     await db_session.flush()
     
     narrator_profile = NarratorProfile(
-        narrative_id="test-0001",
+        narrative_id=TEST_NARRATIVE_ID,
         identity_hash="test123",
         estimated_age=52,
         age_range="45-60",
@@ -85,7 +90,7 @@ async def sample_narrative(db_session):
     db_session.add(narrator_profile)
     
     facial_analysis = FacialAnalysis(
-        narrative_id="test-0001",
+        narrative_id=TEST_NARRATIVE_ID,
         emotion_timeline=[{"timestamp": 0.0, "dominant": "joy", "joy": 0.68, "sadness": 0.05}],
         expression_timeline=[{"timestamp": 0.0, "smiling": True, "frowning": False}],
         grad_cam_path="grad_cam_test.png",
@@ -93,10 +98,13 @@ async def sample_narrative(db_session):
     db_session.add(facial_analysis)
     
     vocal_analysis = VocalAnalysis(
-        narrative_id="test-0001",
+        narrative_id=TEST_NARRATIVE_ID,
         voice_activity_segments=[{"start": 0.0, "end": 3.0, "active": True}],
         pitch_timeline=[{"timestamp": 0.0, "hz": 182.3, "note": "F#3"}],
         mean_pitch_hz=198.4,
+        pitch_range_min_hz=150.0,
+        pitch_range_max_hz=250.0,
+        pitch_variability_std=25.0,
         speech_rate_wpm=127,
         pause_count=3,
         mean_pause_duration_sec=0.5,
@@ -107,7 +115,7 @@ async def sample_narrative(db_session):
     db_session.add(vocal_analysis)
     
     multimodal_fusion = MultimodalFusion(
-        narrative_id="test-0001",
+        narrative_id=TEST_NARRATIVE_ID,
         unified_emotion_timeline=[{"timestamp": 0.0, "fused_emotion_label": "joy"}],
         emotion_congruence={"facial_vocal_agreement_score": 0.78},
         narrator_vector={"narrator_identity_hash": "test123"},
@@ -117,7 +125,7 @@ async def sample_narrative(db_session):
     db_session.add(multimodal_fusion)
     
     transcript = Transcript(
-        narrative_id="test-0001",
+        narrative_id=TEST_NARRATIVE_ID,
         text="This is a test transcript.",
         word_count=5,
         asr_model="whisper-base",

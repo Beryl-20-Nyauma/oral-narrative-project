@@ -58,6 +58,45 @@ services:
     networks:
       - backend
 
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: oral-narratives-worker
+    restart: always
+    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      - DATABASE_URL=postgresql://narrator:narrator123@db:5432/oral_narratives
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - DEBUG=true
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./backend:/app
+      - storage_data:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+
+  flower:
+    image: mher/flower:2.0
+    container_name: oral-narratives-flower
+    restart: always
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - worker
+    networks:
+      - backend
+
   frontend:
     image: nginx:alpine
     container_name: oral-narratives-frontend

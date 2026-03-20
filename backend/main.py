@@ -3,7 +3,7 @@ Oral Narrative Preservation System - FastAPI Backend
 Multimodal analysis: video, audio, facial features, emotions
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
@@ -35,14 +35,25 @@ async def init_db():
     from app.core.seed import seed_database, is_database_seeded
     async with async_session_factory() as db:
         if not await is_database_seeded(db):
-            print("🌱 Seeding demo data...")
+            print("🌱 Seeding sample data...")
             count = await seed_database(db)
-            print(f"✅ Seeded {count} demo narratives")
+            print(f"✅ Seeded {count} sample narratives")
+
+
+async def init_rate_limiter():
+    """Initialize rate limiter with Redis."""
+    if settings.redis_url:
+        from app.services.rate_limit_service import init_rate_limiter as _init
+        _init(settings.redis_url)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.core.logging_config import setup_logging
+    setup_logging()
+    
     await init_db()
+    await init_rate_limiter()
     yield
 
 
@@ -71,12 +82,23 @@ async def api_root():
     }
 
 
-from app.routers import narratives, upload, search, stats
+from app.routers import narratives, upload, search, stats, queue
+from app.routers.queue import router as queue_router
 
 app.include_router(narratives.router)
 app.include_router(upload.router)
 app.include_router(search.router)
 app.include_router(stats.router)
+app.include_router(queue_router)
+
+try:
+    from app.routers import auth, narrators
+    if auth:
+        app.include_router(auth.router)
+    if narrators:
+        app.include_router(narrators.router)
+except ImportError:
+    pass
 
 
 if __name__ == "__main__":

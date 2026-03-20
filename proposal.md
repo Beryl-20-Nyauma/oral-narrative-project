@@ -21,19 +21,19 @@ Develop a production-ready system to capture, analyze, and archive oral narrativ
 | Docker Compose orchestration | ✅ Done |
 | Nginx reverse proxy | ✅ Done |
 | REST API endpoints | ✅ Done |
-| Demo data seeding | ✅ Done |
+| Sample data seeding | ✅ Done |
 | CI/CD pipeline | ✅ Done |
 | Testing infrastructure | ✅ Done |
 
-### In Progress 🚧
+### ML Services ✅
 
 | Feature | Status |
 |---------|--------|
-| Real facial analysis (OpenCV + DeepFace) | 🔴 Mocked |
-| Real audio analysis (Librosa) | 🔴 Mocked |
-| Real multimodal fusion (PyTorch) | 🔴 Mocked |
-| Whisper ASR transcription | 🔴 Not implemented |
-| Face recognition & identification | 🔴 Not implemented |
+| Real facial analysis (OpenCV + DeepFace) | ✅ Complete |
+| Real audio analysis (Librosa) | ✅ Complete |
+| Real multimodal fusion | ✅ Complete |
+| Whisper ASR transcription | ✅ Complete |
+| Face recognition & identification | 🔴 Pending |
 | Celery task queue | 🔴 Redis ready, Celery pending |
 
 ---
@@ -82,9 +82,10 @@ Develop a production-ready system to capture, analyze, and archive oral narrativ
 
 | Service | Purpose | Status |
 |---------|---------|--------|
-| `facial_service.py` | Face detection, emotion, age, gender | Mocked |
-| `audio_service.py` | Pitch, MFCC, speech rate, VAD | Mocked |
-| `fusion_service.py` | Cross-modal attention fusion | Mocked |
+| `facial_service.py` | Face detection, emotion, age, gender | ✅ Complete |
+| `audio_service.py` | Pitch, MFCC, speech rate, VAD | ✅ Complete |
+| `fusion_service.py` | Cross-modal attention fusion | ✅ Complete |
+| `transcription_service.py` | Whisper ASR transcription | ✅ Complete |
 | `narrative_service.py` | CRUD operations | ✅ Working |
 | `upload_service.py` | Video upload + pipeline trigger | ✅ Working |
 | `search_service.py` | Full-text search | ✅ Working |
@@ -265,9 +266,9 @@ curl http://localhost/api/narratives
 | Docker deployment | ✅ Complete |
 | CI/CD pipeline | ✅ Complete |
 | Frontend UI | ✅ Complete |
-| Demo data | ✅ Complete |
+| Sample data seeding | ✅ Complete |
 | Face recognition service | 🔴 Pending |
-| Real ML implementations | 🔴 Pending |
+| Real ML implementations | ✅ Complete |
 | Celery task queue | 🔴 Pending |
 
 ---
@@ -286,23 +287,22 @@ curl http://localhost/api/narratives
 
 ## 13. Next Steps
 
-1. **Implement real ML services**
-   - Replace mocked `facial_service.py` with OpenCV + DeepFace
-   - Replace mocked `audio_service.py` with Librosa
-   - Replace mocked `fusion_service.py` with PyTorch model
+1. **Implement face recognition**
+   - Add embedding storage to database
+   - Integrate FAISS for similarity search
+   - Create `/api/identify` endpoint
 
 2. **Add Celery task queue**
    - Move video processing to background workers
    - Enable progress tracking
 
-3. **Implement face recognition**
-   - Add embedding storage to database
-   - Integrate FAISS for similarity search
-   - Create `/api/identify` endpoint
-
-4. **Add authentication**
+3. **Add authentication**
    - JWT-based auth for protected routes
    - Multi-user support
+
+4. **Performance optimization**
+   - Benchmark processing times
+   - Add GPU support for faster inference
 
 ---
 

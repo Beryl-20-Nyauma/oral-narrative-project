@@ -1,6 +1,7 @@
 """Tests for narrative endpoints."""
 
 import pytest
+import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.narrative_service import (
@@ -10,6 +11,8 @@ from app.services.narrative_service import (
     get_timeline,
     get_profile,
 )
+
+TEST_NARRATIVE_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 
 class TestFetchNarratives:
@@ -63,9 +66,9 @@ class TestFetchNarrativeById:
     @pytest.mark.asyncio
     async def test_returns_narrative(self, db_session: AsyncSession, sample_narrative):
         """Should return narrative if it exists."""
-        result = await fetch_narrative_by_id(db_session, narrative_id="test-0001")
+        result = await fetch_narrative_by_id(db_session, narrative_id=str(TEST_NARRATIVE_ID))
         assert result is not None
-        assert result["archive_id"] == "test-0001"
+        assert result["archive_id"] == str(TEST_NARRATIVE_ID)
 
     @pytest.mark.asyncio
     async def test_returns_none_for_missing(self, db_session: AsyncSession):
@@ -80,7 +83,7 @@ class TestGetNarrativeStatus:
     @pytest.mark.asyncio
     async def test_complete_status(self, db_session: AsyncSession, sample_narrative):
         """Should return complete status."""
-        result = await get_narrative_status(db_session, narrative_id="test-0001")
+        result = await get_narrative_status(db_session, narrative_id=str(TEST_NARRATIVE_ID))
         assert result["status"] == "complete"
 
     @pytest.mark.asyncio
@@ -96,7 +99,7 @@ class TestGetTimeline:
     @pytest.mark.asyncio
     async def test_returns_timeline(self, db_session: AsyncSession, sample_narrative):
         """Should return emotion timeline for complete narrative."""
-        result = await get_timeline(db_session, narrative_id="test-0001")
+        result = await get_timeline(db_session, narrative_id=str(TEST_NARRATIVE_ID))
         assert "facial_emotions" in result
         assert "vocal_features" in result
         assert "unified_timeline" in result
@@ -114,7 +117,7 @@ class TestGetProfile:
     @pytest.mark.asyncio
     async def test_returns_profile(self, db_session: AsyncSession, sample_narrative):
         """Should return narrator profile for complete narrative."""
-        result = await get_profile(db_session, narrative_id="test-0001")
+        result = await get_profile(db_session, narrative_id=str(TEST_NARRATIVE_ID))
         assert "narrator_identity" in result
         assert "vocal_profile" in result
         assert "emotion_congruence" in result

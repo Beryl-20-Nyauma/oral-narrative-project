@@ -1,13 +1,49 @@
 """Database configuration with async SQLAlchemy support."""
 
 import os
-from typing import AsyncGenerator, Optional
+import uuid
+from typing import AsyncGenerator, Optional, Any
+from sqlalchemy import String, TypeDecorator
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
     async_sessionmaker,
     AsyncSession,
 )
+
+
+class GUID(TypeDecorator):
+    """Platform-independent GUID type that stores UUID as CHAR(36) in SQLite."""
+    impl = String(36)
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == 'postgresql':
+            from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+            return dialect.type_descriptor(PG_UUID(as_uuid=True))
+        else:
+            return dialect.type_descriptor(String(36))
+
+    def process_bind_param(self, value: Any, dialect):
+        if value is None:
+            return value
+        elif dialect.name == 'postgresql':
+            return value
+        else:
+            if isinstance(value, uuid.UUID):
+                return str(value)
+            return value
+
+    def process_result_value(self, value: Any, dialect):
+        if value is None:
+            return value
+        elif dialect.name == 'postgresql':
+            return value
+        else:
+            if isinstance(value, str):
+                return uuid.UUID(value)
+            return value
+
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
