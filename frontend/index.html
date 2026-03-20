@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oral narrative  — Oral Narrative Preservation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@300;400&family=Crimson+Pro:ital,wght=0,300;0,400;1,300&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<a href="#archive" class="skip-link">Skip to main content</a>
+<nav aria-label="Main navigation">
+  <div class="nav-logo">
+    <span></span>
+    Oral Narrative
+  </div>
+  <button class="mobile-menu-toggle" onclick="toggleMobileMenu()" aria-label="Toggle menu">
+    <span></span>
+    <span></span>
+    <span></span>
+  </button>
+  <ul class="nav-links">
+    <li><a href="index.html#archive">Archive</a></li>
+    <li><a href="index.html#upload">Record</a></li>
+    <li><a href="analysis.html">Analysis</a></li>
+    <li><a href="narrators.html">Narrators</a></li>
+    <li class="admin-only" style="display:none;"><a href="admin.html">Admin</a></li>
+    <li id="auth-container"></li>
+  </ul>
+</nav>
+
+<section>
+  <div class="hero">
+    <div class="hero-text fade-up">
+      <h1>Where voices become <em>living history</em></h1>
+      <p>A multimodal AI system that captures not just the words of oral narratives, but the identity, emotion, and vocal signature of every storyteller.</p>
+      <div class="hero-actions">
+        <button class="btn-primary" onclick="document.getElementById('upload').scrollIntoView({behavior:'smooth'})">Record a Narrative</button>
+        <button class="btn-secondary" onclick="document.getElementById('archive').scrollIntoView({behavior:'smooth'})">Browse Archive</button>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="narrator-card main">
+        <div class="card-video">
+          <div class="face-placeholder">👩🏾</div>
+          <div class="face-scan"><div class="scan-line"></div></div>
+          <div class="emotion-dots">
+            <div class="emotion-dot" style="background:#e8a85c"></div>
+            <div class="emotion-dot" style="background:#4a6741"></div>
+            <div class="emotion-dot" style="background:#c4857a"></div>
+          </div>
+        </div>
+        <div class="card-info">
+          <div class="card-narrator-name">Kirongosi</div>
+          <div class="card-meta">Kakamega,Kenya · 2025 · 14:32</div>
+          <div class="emotion-bar-row">
+            <div class="emotion-label">Joy</div>
+            <div class="emotion-bar"><div class="emotion-fill" style="width:68%;background:#c4833a"></div></div>
+            <div class="emotion-val">68%</div>
+          </div>
+          <div class="emotion-bar-row">
+            <div class="emotion-label">Sadness</div>
+            <div class="emotion-bar"><div class="emotion-fill" style="width:15%;background:#4a6741"></div></div>
+            <div class="emotion-val">15%</div>
+          </div>
+          <div class="emotion-bar-row">
+            <div class="emotion-label">Surprise</div>
+            <div class="emotion-bar"><div class="emotion-fill" style="width:11%;background:#c4857a"></div></div>
+            <div class="emotion-val">11%</div>
+          </div>
+          <div class="emotion-bar-row">
+            <div class="emotion-label">Neutral</div>
+            <div class="emotion-bar"><div class="emotion-fill" style="width:6%;background:#8a7b6a"></div></div>
+            <div class="emotion-val">6%</div>
+          </div>
+        </div>
+      </div>
+      <div class="narrator-card secondary">
+        <div class="card-video" style="height:100px">
+          <div class="face-placeholder" style="width:50px;height:50px;font-size:1.5rem">👴🏻</div>
+          <div class="face-scan"><div class="scan-line"></div></div>
+        </div>
+        <div class="card-info">
+          <div class="card-narrator-name" style="font-size:0.9rem">Rose</div>
+          <div class="card-meta">Kisumu, Kenya</div>
+          <div class="emotion-bar-row">
+            <div class="emotion-label">Neutral</div>
+            <div class="emotion-bar"><div class="emotion-fill" style="width:54%;background:#8a7b6a"></div></div>
+            <div class="emotion-val">54%</div>
+          </div>
+          <div class="emotion-bar-row">
+            <div class="emotion-label">Sadness</div>
+            <div class="emotion-bar"><div class="emotion-fill" style="width:29%;background:#4a6741"></div></div>
+            <div class="emotion-val">29%</div>
+          </div>
+        </div>
+      </div>
+      <div class="waveform-card">
+        <div class="waveform-label">🎙 Voice Activity · Pitch: 198 Hz · WPM: 127</div>
+        <div class="waveform-bars" id="heroWave"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="stats-bar">
+  <div class="stat-item">
+    <span class="stat-number" id="statNarratives">5</span>
+    <span class="stat-label">Narratives Archived</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-number" id="statNarrators">5</span>
+    <span class="stat-label">Unique Narrators</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-number">14.8<small style="font-size:1.2rem">s</small></span>
+    <span class="stat-label">Avg Duration</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-number">7</span>
+    <span class="stat-label">Emotions Tracked</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-number">3</span>
+    <span class="stat-label">Modalities Fused</span>
+  </div>
+</div>
+
+<main>
+  <section id="archive">
+    <div class="section-header">
+      <h2 class="section-title">Narrative Archive</h2>
+      <span class="section-count" id="archiveCount">5 stories</span>
+    </div>
+    <div class="search-controls" role="search">
+      <div class="search-field">
+        <span class="search-icon" aria-hidden="true">⌕</span>
+        <input type="text" id="searchInput" placeholder="Search by narrator, theme, or keyword…" oninput="debounceFilter()" aria-label="Search narratives">
+      </div>
+      <select class="filter-select" id="emotionFilter" onchange="filterNarratives()" aria-label="Filter by emotion">
+        <option value="">All Emotions</option>
+        <option value="joy">Joy</option>
+        <option value="sadness">Sadness</option>
+        <option value="neutral">Neutral</option>
+        <option value="surprise">Surprise</option>
+        <option value="anger">Anger</option>
+        <option value="fear">Fear</option>
+      </select>
+      <select class="filter-select" id="themeFilter" onchange="filterNarratives()" aria-label="Filter by theme">
+        <option value="">All Themes</option>
+        <option value="memory">Memory</option>
+        <option value="family">Family</option>
+        <option value="labor">Labor</option>
+        <option value="migration">Migration</option>
+        <option value="music">Music</option>
+        <option value="food">Food</option>
+        <option value="community">Community</option>
+      </select>
+      <select class="filter-select" id="sortSelect" onchange="filterNarratives()" aria-label="Sort narratives">
+        <option value="newest">Newest First</option>
+        <option value="oldest">Oldest First</option>
+        <option value="duration_desc">Longest Duration</option>
+        <option value="duration_asc">Shortest Duration</option>
+        <option value="title">Title A-Z</option>
+      </select>
+    </div>
+    <div class="active-filters" id="activeFilters"></div>
+    <div class="logged-in-filters" id="loggedInFilters" style="display:none;">
+      <label class="checkbox-label">
+        <input type="checkbox" id="myNarrativesFilter" onchange="filterNarratives()">
+        <span>Show only my narratives</span>
+      </label>
+    </div>
+    <div class="narrative-grid" id="narrativeGrid" role="list" aria-label="Narratives"></div>
+  </section>
+
+  <section id="upload">
+    <div class="section-header">
+      <h2 class="section-title">Record a New Narrative</h2>
+      <span class="section-count">Full multimodal analysis on upload</span>
+    </div>
+    <div id="processingBanner" class="processing-banner">
+      <div class="processing-spinner"></div>
+      <div class="processing-text" id="processingText">Analyzing facial features…</div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" id="progressFill"></div>
+      </div>
+    </div>
+    <div id="upload-form-wrap">
+      <div class="upload-steps">
+        <div class="upload-step active" data-step="1">
+          <span class="step-number">1</span>
+          <span class="step-label">Upload Video</span>
+        </div>
+        <div class="upload-step" data-step="2">
+          <span class="step-number">2</span>
+          <span class="step-label">Add Details</span>
+        </div>
+        <div class="upload-step" data-step="3">
+          <span class="step-number">3</span>
+          <span class="step-label">Processing</span>
+        </div>
+      </div>
+      <div class="upload-step-content" id="step1Content">
+        <div class="upload-dropzone" id="dropzone">
+          <input type="file" id="videoInput" accept="video/*" onchange="handleFileSelect(event)">
+          <div class="upload-icon">🎬</div>
+          <div class="upload-text">Drop video file here, or click to browse</div>
+          <div class="upload-hint">MP4, MOV, WebM — up to 2GB</div>
+          <div id="selectedFile" class="selected-file"></div>
+        </div>
+        <div class="upload-error" id="uploadError"></div>
+        <div class="step-nav">
+          <button class="btn-primary" onclick="goToStep(2)" id="nextStep1" disabled>Continue</button>
+        </div>
+      </div>
+      <div class="upload-step-content" id="step2Content" style="display:none;">
+        <div id="upload-form" class="analysis-panel" style="border:none;padding:0;background:transparent;">
+          <div class="upload-form">
+            <div class="form-group">
+              <label class="form-label">Narrative Title *</label>
+              <input class="form-input" type="text" id="fTitle" placeholder="The day the river flooded…" required>
+              <span class="form-error" id="fTitleError"></span>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Narrator Name</label>
+              <input class="form-input" type="text" id="fNarrator" placeholder="e.g. Kirongosi A">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Location</label>
+              <input class="form-input" type="text" id="fLocation" placeholder="e.g. Kakamega, Kenya">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Themes (comma-separated)</label>
+              <input class="form-input" type="text" id="fThemes" placeholder="memory, water, community">
+            </div>
+            <div class="form-group full">
+              <label class="form-label">Transcript / Notes (optional)</label>
+              <textarea class="form-textarea" id="fTranscript" placeholder="Paste a transcript or brief summary of the narrative…"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="step-nav">
+          <button class="btn-secondary" onclick="goToStep(1)">Back</button>
+          <button class="btn-primary" onclick="submitNarrative()">Analyze & Archive Narrative</button>
+        </div>
+      </div>
+      <div class="upload-step-content" id="step3Content" style="display:none;">
+        <div class="processing-display">
+          <div class="processing-animation">
+            <div class="processing-ring"></div>
+            <div class="processing-icon">🎬</div>
+          </div>
+          <h3 id="processingStage">Processing your narrative...</h3>
+          <p id="processingDesc">This may take a few minutes depending on video length.</p>
+          <div class="processing-progress">
+            <div class="progress-bar-wrap">
+              <div class="progress-bar-fill" id="stepProgressFill"></div>
+            </div>
+            <span class="progress-pct" id="progressPct">0%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="modal-overlay" id="narrativeModal" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modalTitle">—</div>
+        <div class="modal-narrator" id="modalNarrator">—</div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-action-btn" onclick="shareNarrative()" title="Share">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="18" cy="5" r="3"/>
+            <circle cx="6" cy="12" r="3"/>
+            <circle cx="18" cy="19" r="3"/>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+          </svg>
+        </button>
+        <button class="modal-close" onclick="closeModalDirect()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div>
+        <div class="modal-video" id="modalVideo">
+          <div class="play-btn">▶</div>
+        </div>
+        <div style="margin-top:1rem">
+          <div class="timeline-label" style="margin-bottom:0.5rem;display:flex;justify-content:space-between">
+            <span>Emotion Timeline</span>
+            <span id="modalDuration">—</span>
+          </div>
+          <div class="timeline-bar" id="modalEmotionBar"></div>
+        </div>
+        <div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap" id="modalTags"></div>
+      </div>
+      <div>
+        <p style="font-family:'DM Mono',monospace;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mid);margin-bottom:0.75rem">Transcript</p>
+        <div class="modal-transcript" id="modalTranscript"></div>
+        <div style="margin-top:1.25rem">
+          <p style="font-family:'DM Mono',monospace;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mid);margin-bottom:0.75rem">Narrator Profile</p>
+          <div id="modalProfile" style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="footer-inner">
+    <div>
+      <div class="footer-brand">Oral narrative </div>
+      <p class="footer-tagline">"Every oral tradition carries the full weight of its teller — their identity, their trembling voice, the flash of sorrow or joy across their face. We preserve all of it."</p>
+    </div>
+    <div>
+      <div class="footer-col-title">System</div>
+      <ul class="footer-links">
+        <li><a href="#">FastAPI Backend</a></li>
+        <li><a href="#">REST API Docs</a></li>
+        <li><a href="#">WebSocket Streaming</a></li>
+        <li><a href="#">Archive Schema</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="footer-col-title">Research</div>
+      <ul class="footer-links">
+        <li><a href="#">Multimodal Fusion Model</a></li>
+        <li><a href="#">Grad-CAM Analysis</a></li>
+        <li><a href="#">FACS Reference</a></li>
+        <li><a href="#">Oral History Methodology</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span class="footer-bottom-text">© 2026 Oral narrative  Oral Archive System · Built for cultural heritage preservation</span>
+    <div class="tech-stack">
+      <span class="tech-badge">OpenCV</span>
+      <span class="tech-badge">DeepFace</span>
+      <span class="tech-badge">Librosa</span>
+      <span class="tech-badge">WebRTC-VAD</span>
+      <span class="tech-badge">PyTorch</span>
+      <span class="tech-badge">Grad-CAM</span>
+      <span class="tech-badge">scikit-learn</span>
+      <span class="tech-badge">FastAPI</span>
+      <span class="tech-badge">Whisper ASR</span>
+    </div>
+  </div>
+</footer>
+
+<div class="modal-overlay" id="loginModal" onclick="if(event.target===this)closeLoginModal()">
+  <div class="modal modal-auth">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Login</div>
+        <div class="modal-narrator">Access your account</div>
+      </div>
+      <button class="modal-close" onclick="closeLoginModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="loginForm" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" type="email" id="loginEmail" required placeholder="you@example.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input class="form-input" type="password" id="loginPassword" required placeholder="••••••••">
+        </div>
+        <div id="loginError" class="auth-error" style="display:none;color:var(--terracotta);font-size:0.85rem;margin-bottom:1rem;"></div>
+        <div class="form-group" style="display:flex;gap:1rem;flex-direction:column;">
+          <button type="submit" class="btn-primary" style="width:100%">Login</button>
+          <p style="text-align:center;font-size:0.85rem;color:var(--mid);">
+            Don't have an account? <a href="#" onclick="openRegisterModal()" style="color:var(--amber);">Register</a>
+          </p>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="registerModal" onclick="if(event.target===this)closeRegisterModal()">
+  <div class="modal modal-auth">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Create Account</div>
+        <div class="modal-narrator">Join the oral history archive</div>
+      </div>
+      <button class="modal-close" onclick="closeRegisterModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="registerForm" onsubmit="handleRegister(event)">
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input class="form-input" type="text" id="registerName" placeholder="Your name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" type="email" id="registerEmail" required placeholder="you@example.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input class="form-input" type="password" id="registerPassword" required minlength="6" placeholder="Min 6 characters">
+        </div>
+        <div id="registerError" class="auth-error" style="display:none;color:var(--terracotta);font-size:0.85rem;margin-bottom:1rem;"></div>
+        <div class="form-group" style="display:flex;gap:1rem;flex-direction:column;">
+          <button type="submit" class="btn-primary" style="width:100%">Create Account</button>
+          <p style="text-align:center;font-size:0.85rem;color:var(--mid);">
+            Already have an account? <a href="#" onclick="openLoginModal()" style="color:var(--amber);">Login</a>
+          </p>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

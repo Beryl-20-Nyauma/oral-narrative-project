@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Narrators — Oral Narrative Preservation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@300;400&family=Crimson+Pro:ital,wght=0,300;0,400;1,300&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">
+    <span></span>
+    <a href="index.html" style="color:inherit;text-decoration:none;">Oral Narrative</a>
+  </div>
+  <ul class="nav-links">
+    <li><a href="index.html#archive">Archive</a></li>
+    <li><a href="index.html#upload">Record</a></li>
+    <li><a href="admin.html">Admin</a></li>
+    <li id="auth-container"></li>
+  </ul>
+</nav>
+
+<main style="padding-top:6rem;">
+  <section>
+    <div class="section-header">
+      <h2 class="section-title">Narrators</h2>
+      <span class="section-count" id="narratorCount">0 storytellers</span>
+    </div>
+    
+    <div class="search-controls">
+      <button class="btn-primary" onclick="openRegisterNarratorModal()">+ Register Narrator</button>
+      <button class="btn-secondary" onclick="rebuildIndex()">Rebuild Face Index</button>
+    </div>
+    
+    <div class="narrative-grid" id="narratorGrid">
+      <div class="loading-state" style="grid-column:1/-1;text-align:center;padding:3rem;">
+        <div style="font-family:'DM Mono',monospace;color:var(--mid);font-size:0.8rem;">Loading narrators...</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="modal-overlay" id="narratorModal" onclick="if(event.target===this)closeNarratorModal()">
+  <div class="modal" style="max-width:600px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="narratorModalTitle">Narrator</div>
+        <div class="modal-narrator" id="narratorModalMeta"></div>
+      </div>
+      <button class="modal-close" onclick="closeNarratorModal()">✕</button>
+    </div>
+    <div class="modal-body" id="narratorModalBody">
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="registerNarratorModal" onclick="if(event.target===this)closeRegisterNarratorModal()">
+  <div class="modal modal-auth">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Register Narrator</div>
+        <div class="modal-narrator">Add a known storyteller</div>
+      </div>
+      <button class="modal-close" onclick="closeRegisterNarratorModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="registerNarratorForm" onsubmit="handleRegisterNarrator(event)">
+        <div class="form-group">
+          <label class="form-label">Name</label>
+          <input class="form-input" type="text" id="narratorName" required placeholder="e.g. Mama Fatima">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Reference Image</label>
+          <input class="form-input" type="file" id="narratorImage" accept="image/*" required>
+        </div>
+        <div id="registerNarratorError" class="auth-error" style="display:none;color:var(--terracotta);font-size:0.85rem;margin-bottom:1rem;"></div>
+        <div class="form-group" style="display:flex;gap:1rem;">
+          <button type="submit" class="btn-primary" style="flex:1">Register</button>
+          <button type="button" class="btn-secondary" onclick="closeRegisterNarratorModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="renameNarratorModal" onclick="if(event.target===this)closeRenameModal()">
+  <div class="modal modal-auth">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Rename Narrator</div>
+        <div class="modal-narrator" id="renameNarratorMeta"></div>
+      </div>
+      <button class="modal-close" onclick="closeRenameModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="renameNarratorForm" onsubmit="handleRenameNarrator(event)">
+        <div class="form-group">
+          <label class="form-label">New Name</label>
+          <input class="form-input" type="text" id="renameNarratorName" required placeholder="e.g. Mama Fatima">
+        </div>
+        <input type="hidden" id="renameNarratorId">
+        <div class="form-group" style="display:flex;gap:1rem;">
+          <button type="submit" class="btn-primary" style="flex:1">Save</button>
+          <button type="button" class="btn-secondary" onclick="closeRenameModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+let allNarrators = [];
+
+async function loadNarrators() {
+  try {
+    const response = await API.narrators.list({ limit: 100 });
+    allNarrators = response.narrators || response || [];
+    renderNarrators();
+  } catch (error) {
+    console.error('Failed to load narrators:', error);
+    document.getElementById('narratorGrid').innerHTML = `
+      <div class="error-state" style="grid-column:1/-1;text-align:center;padding:3rem;">
+        <div style="color:var(--terracotta);margin-bottom:1rem;">Failed to load narrators: ${error.message}</div>
+        <button class="btn-secondary" onclick="loadNarrators()">Retry</button>
+      </div>
+    `;
+  }
+}
+
+function renderNarrators() {
+  const grid = document.getElementById('narratorGrid');
+  document.getElementById('narratorCount').textContent = `${allNarrators.length} storytellers`;
+  
+  if (allNarrators.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state" style="grid-column:1/-1;text-align:center;padding:3rem;">
+        <div style="font-family:'DM Mono',monospace;color:var(--mid);font-size:0.8rem;margin-bottom:1rem;">No narrators registered yet</div>
+        <button class="btn-primary" onclick="openRegisterNarratorModal()">Register First Narrator</button>
+      </div>
+    `;
+    return;
+  }
+  
+  grid.innerHTML = allNarrators.map(n => `
+    <div class="narrative-card" onclick="openNarratorModal('${n.id}')">
+      <div class="card-thumb" style="background:linear-gradient(135deg,#3a2005 0%,#1a1008 100%)">
+        <div class="thumb-face">${n.name ? n.name[0].toUpperCase() : '?'}</div>
+        <div class="card-emotion-badge" style="background:var(--amber-light)22;color:var(--amber-light);border:1px solid var(--amber-light)44">
+          ${n.narrative_count || 0} stories
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-title">${n.name || 'Unknown'}</div>
+        <div class="card-narrator">${n.named_by_user ? '✓ Verified' : 'Auto-detected'}</div>
+        <div class="card-excerpt" style="font-size:0.75rem;">First seen: ${n.first_seen_at ? new Date(n.first_seen_at).toLocaleDateString() : 'Unknown'}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function openNarratorModal(id) {
+  const narrator = allNarrators.find(n => n.id === id);
+  if (!narrator) return;
+  
+  document.getElementById('narratorModalTitle').textContent = narrator.name || 'Unknown';
+  document.getElementById('narratorModalMeta').textContent = `${narrator.narrative_count || 0} narratives`;
+  
+  let narrativesHtml = '<p style="font-family:DM Mono,monospace;font-size:0.8rem;color:var(--mid);">Loading narratives...</p>';
+  
+  document.getElementById('narratorModalBody').innerHTML = `
+    <div style="margin-bottom:1.5rem;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+        <div class="profile-stat">
+          <span class="profile-stat-value">${narrator.narrative_count || 0}</span>
+          <span class="profile-stat-label">Narratives</span>
+        </div>
+        <div class="profile-stat">
+          <span class="profile-stat-value">${narrator.named_by_user ? 'Yes' : 'No'}</span>
+          <span class="profile-stat-label">Verified</span>
+        </div>
+      </div>
+      ${narrator.reference_image_path ? `<div style="font-size:0.7rem;color:var(--mid);margin-bottom:1rem;">Reference: ${narrator.reference_image_path}</div>` : ''}
+    </div>
+    <div style="display:flex;gap:0.5rem;">
+      <button class="btn-secondary" onclick="openRenameModal('${narrator.id}', '${narrator.name || ''}')">Rename</button>
+      <button class="btn-secondary" onclick="closeNarratorModal()">Close</button>
+    </div>
+  `;
+  
+  document.getElementById('narratorModal').classList.add('open');
+}
+
+function closeNarratorModal() {
+  document.getElementById('narratorModal').classList.remove('open');
+}
+
+function openRegisterNarratorModal() {
+  document.getElementById('registerNarratorForm').reset();
+  document.getElementById('registerNarratorError').style.display = 'none';
+  document.getElementById('registerNarratorModal').classList.add('open');
+}
+
+function closeRegisterNarratorModal() {
+  document.getElementById('registerNarratorModal').classList.remove('open');
+}
+
+async function handleRegisterNarrator(e) {
+  e.preventDefault();
+  
+  const name = document.getElementById('narratorName').value.trim();
+  const imageFile = document.getElementById('narratorImage').files[0];
+  
+  if (!imageFile) {
+    document.getElementById('registerNarratorError').textContent = 'Please select an image file';
+    document.getElementById('registerNarratorError').style.display = 'block';
+    return;
+  }
+  
+  const formData = new FormData();
+  formData.append('name', name);
+  formData.append('reference_image', imageFile);
+  
+  try {
+    await API.narrators.register(formData);
+    Auth.showNotification('Narrator registered successfully!', 'success');
+    closeRegisterNarratorModal();
+    await loadNarrators();
+  } catch (error) {
+    document.getElementById('registerNarratorError').textContent = error.message;
+    document.getElementById('registerNarratorError').style.display = 'block';
+  }
+}
+
+function openRenameModal(id, currentName) {
+  document.getElementById('renameNarratorId').value = id;
+  document.getElementById('renameNarratorName').value = currentName;
+  document.getElementById('renameNarratorMeta').textContent = `Current: ${currentName || 'Unknown'}`;
+  closeNarratorModal();
+  document.getElementById('renameNarratorModal').classList.add('open');
+}
+
+function closeRenameModal() {
+  document.getElementById('renameNarratorModal').classList.remove('open');
+}
+
+async function handleRenameNarrator(e) {
+  e.preventDefault();
+  
+  const id = document.getElementById('renameNarratorId').value;
+  const name = document.getElementById('renameNarratorName').value.trim();
+  
+  try {
+    await API.narrators.rename(id, name);
+    Auth.showNotification('Narrator renamed successfully!', 'success');
+    closeRenameModal();
+    await loadNarrators();
+  } catch (error) {
+    Auth.showNotification(`Failed to rename: ${error.message}`, 'error');
+  }
+}
+
+async function rebuildIndex() {
+  if (!confirm('Rebuild the face recognition index? This may take a moment.')) return;
+  
+  try {
+    const result = await API.narrators.rebuildIndex();
+    Auth.showNotification(result.message || 'Index rebuilt successfully!', 'success');
+  } catch (error) {
+    Auth.showNotification(`Failed to rebuild index: ${error.message}`, 'error');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await Auth.fetchCurrentUser();
+  await loadNarrators();
+});
+</script>
+</body>
+</html>
