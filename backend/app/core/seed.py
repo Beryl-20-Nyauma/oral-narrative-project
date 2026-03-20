@@ -210,3 +210,40 @@ async def is_database_seeded(db: AsyncSession) -> bool:
     """Check if database already has sample data."""
     result = await db.execute(select(Narrative).limit(1))
     return result.scalar_one_or_none() is not None
+
+
+async def seed_demo_user(db: AsyncSession):
+    """
+    Create a demo user with admin privileges for testing purposes.
+    
+    Args:
+        db: Database session
+        
+    Returns:
+        The created User object with is_admin=True
+    """
+    from sqlalchemy import select
+    from app.models.narrative import User
+    from app.services.auth_service import hash_password
+    
+    result = await db.execute(select(User).where(User.email == "demo@oral-narrative.org"))
+    existing = result.scalar_one_or_none()
+    
+    if existing:
+        logger.info(f"Demo user already exists: {existing.email}")
+        return existing
+    
+    user = User(
+        email="demo@oral-narrative.org",
+        hashed_password=hash_password("demo123"),
+        full_name="Demo User",
+        is_active=True,
+        is_admin=True
+    )
+    
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    
+    logger.info(f"Created demo user: {user.email}")
+    return user

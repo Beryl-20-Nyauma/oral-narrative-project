@@ -1,5 +1,6 @@
 """API route handlers for authentication."""
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +19,7 @@ from app.services.auth_service import (
 )
 from config import get_settings
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 settings = get_settings()
 
@@ -148,37 +150,52 @@ async def register(
     Returns:
         Login response with token and user info
     """
-    existing = await get_user_by_email(db, user_data.email)
-    
-    if existing:
+    try:
+        existing = await get_user_by_email(db, user_data.email)
+        
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+        
+        user = await create_user(
+            db=db,
+            email=user_data.email,
+            password=user_data.password,
+            full_name=user_data.full_name
+        )
+        
+        access_token = create_access_token(
+            data={"sub": str(user.id)},
+            expires_delta=timedelta(minutes=settings.access_token_expire_minutes)
+        )
+        
+        return LoginResponse(
+            access_token=access_token,
+            token_type="bearer",
+            user=UserResponse(
+                id=str(user.id),
+                email=user.email,
+                full_name=user.full_name,
+                is_active=user.is_active,
+                is_admin=user.is_admin
+            )
+        )
+    except HTTPException:
+        raise
+    except ValueError as e:
+        logger.error(f"Registration validation error: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            detail=str(e)
         )
-    
-    user = await create_user(
-        db=db,
-        email=user_data.email,
-        password=user_data.password,
-        full_name=user_data.full_name
-    )
-    
-    access_token = create_access_token(
-        data={"sub": str(user.id)},
-        expires_delta=timedelta(minutes=settings.access_token_expire_minutes)
-    )
-    
-    return LoginResponse(
-        access_token=access_token,
-        token_type="bearer",
-        user=UserResponse(
-            id=str(user.id),
-            email=user.email,
-            full_name=user.full_name,
-            is_active=user.is_active,
-            is_admin=user.is_admin
+    except Exception as e:
+        logger.error(f"Registration failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Registration failed: {str(e)}"
         )
-    )
 
 
 @router.post("/login", response_model=LoginResponse)

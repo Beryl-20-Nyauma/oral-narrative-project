@@ -189,23 +189,25 @@ const Auth = (function() {
 
   function updateAuthGatedElements() {
     const uploadSection = document.getElementById('upload');
+    const registerSection = document.getElementById('register-narrator');
+    
     if (uploadSection) {
       const uploadForm = document.getElementById('upload-form-wrap');
-      const authPrompt = document.getElementById('auth-prompt');
+      const uploadAuthPrompt = document.getElementById('upload-auth-prompt');
       
       if (isLoggedIn()) {
         if (uploadForm) uploadForm.style.display = 'block';
-        if (authPrompt) authPrompt.remove();
+        if (uploadAuthPrompt) uploadAuthPrompt.remove();
       } else {
         if (uploadForm) uploadForm.style.display = 'none';
-        if (!authPrompt && uploadSection.querySelector('.section-header')) {
+        if (!uploadAuthPrompt && uploadSection.querySelector('.section-header')) {
           const prompt = document.createElement('div');
-          prompt.id = 'auth-prompt';
+          prompt.id = 'upload-auth-prompt';
           prompt.className = 'auth-prompt';
           prompt.innerHTML = `
             <div class="auth-prompt-content">
               <div class="auth-prompt-icon">🔐</div>
-              <h3>Sign in to Record</h3>
+              <h3>Sign in to Analyze Videos</h3>
               <p>Create an account or sign in to upload and analyze oral narratives.</p>
               <div class="auth-prompt-actions">
                 <button class="btn-primary" onclick="openLoginModal()">Login</button>
@@ -218,14 +220,50 @@ const Auth = (function() {
       }
     }
     
-    const heroRecordBtn = document.querySelector('.hero-actions .btn-primary');
-    if (heroRecordBtn) {
-      if (!isLoggedIn()) {
-        heroRecordBtn.textContent = 'Sign in to Record';
-        heroRecordBtn.onclick = () => openLoginModal();
+    if (registerSection) {
+      const registerForm = document.querySelector('.register-form');
+      const registerAuthPrompt = document.getElementById('register-auth-prompt');
+      
+      if (isLoggedIn()) {
+        if (registerForm) registerForm.style.display = 'block';
+        if (registerAuthPrompt) registerAuthPrompt.remove();
       } else {
-        heroRecordBtn.textContent = 'Record a Narrative';
-        heroRecordBtn.onclick = () => document.getElementById('upload').scrollIntoView({behavior:'smooth'});
+        if (registerForm) registerForm.style.display = 'none';
+        if (!registerAuthPrompt && registerSection.querySelector('.section-header')) {
+          const prompt = document.createElement('div');
+          prompt.id = 'register-auth-prompt';
+          prompt.className = 'auth-prompt';
+          prompt.innerHTML = `
+            <div class="auth-prompt-content">
+              <div class="auth-prompt-icon">🔐</div>
+              <h3>Sign in to Register Narrators</h3>
+              <p>Create an account or sign in to register narrators and analyze videos.</p>
+              <div class="auth-prompt-actions">
+                <button class="btn-primary" onclick="openLoginModal()">Login</button>
+                <button class="btn-secondary" onclick="openRegisterModal()">Create Account</button>
+              </div>
+            </div>
+          `;
+          registerSection.appendChild(prompt);
+        }
+      }
+    }
+  }
+    
+    const heroButtons = document.querySelectorAll('.hero-actions .btn-primary, .hero-actions .btn-secondary');
+    if (heroButtons.length >= 2) {
+      const [registerBtn, analyzeBtn] = heroButtons;
+      
+      if (!isLoggedIn()) {
+        registerBtn.textContent = 'Sign in to Register';
+        registerBtn.onclick = () => openLoginModal();
+        analyzeBtn.textContent = 'Sign in to Analyze';
+        analyzeBtn.onclick = () => openLoginModal();
+      } else {
+        registerBtn.textContent = 'Register Narrator';
+        registerBtn.onclick = () => document.getElementById('register-narrator').scrollIntoView({behavior:'smooth'});
+        analyzeBtn.textContent = 'Analyze a Video';
+        analyzeBtn.onclick = () => document.getElementById('upload').scrollIntoView({behavior:'smooth'});
       }
     }
   }

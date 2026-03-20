@@ -31,7 +31,7 @@ narrative_themes = Table(
 
 class Narrator(Base):
     __tablename__ = "narrators"
-
+    
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), default="Unknown")
     face_embedding = Column(JSON)
@@ -41,25 +41,26 @@ class Narrator(Base):
     narrative_count = Column(Integer, default=0)
     named_by_user = Column(Boolean, default=False)
     extra_data = Column(JSON)
+    deleted_at = Column(DateTime, nullable=True)
 
     narratives = relationship("Narrative", back_populates="narrator")
 
 
 class Narrative(Base):
     __tablename__ = "narratives"
-
+    
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
     status = Column(String(50), default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
+    
     title = Column(String(500), nullable=False)
     narrator_name = Column(String(255))
     location = Column(String(255))
     language = Column(String(10), default="en")
     duration_sec = Column(Float, default=0.0)
     date_recorded = Column(Date)
-
+    
     video_path = Column(Text)
     audio_path = Column(Text)
     thumbnail_path = Column(Text)
@@ -72,6 +73,7 @@ class Narrative(Base):
     
     narrator_id = Column(GUID(), ForeignKey("narrators.id", ondelete="SET NULL"))
     narrator_match_confidence = Column(Float)
+    deleted_at = Column(DateTime, nullable=True)
 
     themes = relationship("Theme", secondary=narrative_themes, back_populates="narratives")
     narrator = relationship("Narrator", back_populates="narratives")

@@ -49,8 +49,10 @@ class Settings(BaseSettings):
     enable_faiss_indexing: bool = True
 
     async_processing: bool = True
-
+    
     lightweight_mode: bool = False
+    
+    seed_sample_data: bool = False
 
     @property
     def cors_origins(self) -> List[str]:

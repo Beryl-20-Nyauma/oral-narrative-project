@@ -597,6 +597,21 @@
     text-transform: uppercase;
     margin-bottom: 0.75rem;
   }
+  
+  .unknown-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.55rem;
+    padding: 0.1rem 0.4rem;
+    background: rgba(107, 114, 128, 0.1);
+    border: 1px solid rgba(107, 114, 128, 0.3);
+    border-radius: 12px;
+    color: #6b7280;
+    margin-left: 0.5rem;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.02em;
+  }
 
   .card-excerpt {
     font-size: 0.9rem;
@@ -1924,6 +1939,209 @@
     font-size: 0.8rem;
     color: var(--amber);
     min-width: 40px;
+  }
+  
+  .review-header {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  
+  .review-header h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    color: var(--ink);
+    margin-bottom: 0.5rem;
+  }
+  
+  .review-header p {
+    color: var(--mid);
+    font-size: 0.9rem;
+  }
+  
+  .narrator-detected {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: rgba(74,103,65,0.1);
+    border: 1px solid rgba(74,103,65,0.3);
+    border-radius: 4px;
+    margin-bottom: 1rem;
+  }
+  
+  .detected-name {
+    font-family: 'Crimson Pro', serif;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  
+  .detected-confidence {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--sage);
+    background: var(--parchment);
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+  }
+  
+  .btn-change {
+    margin-left: auto;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    padding: 0.3rem 0.6rem;
+    background: var(--ink);
+    color: var(--parchment);
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .btn-change:hover {
+    background: var(--amber);
+  }
+  
+  .transcript-meta {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.5rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--mid);
+  }
+  
+  .transcript-meta span {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  
+  /* ── REGISTER NARRATOR SECTION ── */
+  #register-narrator {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2.5rem;
+    margin-bottom: 4rem;
+  }
+  
+  .two-column-layout {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 3rem;
+  }
+  
+  .register-info h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    color: var(--ink);
+    margin-bottom: 1rem;
+  }
+  
+  .register-info p {
+    color: var(--mid);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin-bottom: 2rem;
+  }
+  
+  .info-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .info-card {
+    padding: 1.5rem;
+    background: var(--cream);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  
+  .info-icon {
+    font-size: 2rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  .info-card h4 {
+    font-family: 'Crimson Pro', serif;
+    font-size: 1.1rem;
+    color: var(--ink);
+    margin-bottom: 0.5rem;
+  }
+  
+  .info-card p {
+    color: var(--mid);
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+  
+  .register-form {
+    background: rgba(245,240,232,0.5);
+    padding: 2rem;
+    border-radius: 4px;
+  }
+  
+  .media-upload-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  
+  .media-tab {
+    flex: 1;
+    padding: 0.75rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: var(--parchment);
+    border: 1px solid var(--border);
+    color: var(--mid);
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .media-tab:hover {
+    background: rgba(196,131,58,0.1);
+    border-color: var(--amber);
+  }
+  
+  .media-tab.active {
+    background: var(--ink);
+    color: var(--parchment);
+    border-color: var(--ink);
+  }
+  
+  .form-actions {
+    margin-top: 2rem;
+  }
+  
+  .register-status {
+    margin-top: 1rem;
+    padding: 1rem;
+    border-radius: 4px;
+    display: none;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+  }
+  
+  .register-status.success {
+    display: block;
+    background: rgba(74,103,65,0.1);
+    border: 1px solid rgba(74,103,65,0.3);
+    color: var(--sage);
+  }
+  
+  .register-status.error {
+    display: block;
+    background: rgba(181,78,42,0.1);
+    border: 1px solid rgba(181,78,42,0.3);
+    color: var(--terracotta);
   }
 
   .upload-dropzone {

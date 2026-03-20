@@ -112,6 +112,7 @@ oral-narrative-project/
 
 ## REST API Endpoints
 
+### Narratives
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET`  | `/api/narratives` | List all narratives (filter by narrator, emotion, theme) |
@@ -120,8 +121,41 @@ oral-narrative-project/
 | `GET`  | `/api/narratives/{id}/status` | Check processing progress |
 | `GET`  | `/api/narratives/{id}/emotion-timeline` | Synchronized emotion data |
 | `GET`  | `/api/narratives/{id}/narrator-profile` | Identity + vocal profile |
+| `POST` | `/api/narratives/retry/{id}` | Retry failed processing |
+
+### Narrators
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET`  | `/api/narrators` | List all narrators |
+| `GET`  | `/api/narrators/{id}` | Get narrator details |
+| `POST` | `/api/narrators/register` | Register narrator with reference image |
+| `POST` | `/api/narrators/identify` | Identify narrator from video/image |
+| `POST` | `/api/narrators/rebuild-index` | Rebuild FAISS index |
+| `PATCH` | `/api/narrators/{id}` | Rename narrator |
+| `GET`  | `/api/narrators/{id}/narratives` | Get narrator's narratives |
+
+### Authentication
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/auth/register` | Register new user |
+| `POST` | `/api/auth/login` | Login (OAuth2 form) |
+| `GET`  | `/api/auth/me` | Get current user |
+| `POST` | `/api/auth/logout` | Logout |
+
+### Search & Stats
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | `GET`  | `/api/search?q=...&field=...` | Full-text search |
 | `GET`  | `/api/stats` | System-wide analytics |
+| `GET`  | `/api/stats/benchmark` | Performance benchmarks |
+| `GET`  | `/api/stats/health` | Health check with GPU info |
+
+### Queue (Async Processing)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET`  | `/api/queue/status` | Celery workers and queue status |
+| `GET`  | `/api/queue/tasks/{task_id}` | Get task status |
+| `POST` | `/api/queue/retry/{narrative_id}` | Retry failed task |
 
 ---
 
@@ -145,6 +179,18 @@ oral-narrative-project/
   - EmotionHead: 7-class classification (joy/sadness/anger/fear/surprise/disgust/neutral)
   - NarratorIdentityHead: 512-dim L2-normalized embedding
 - **scikit-learn** — StandardScaler, PCA, KMeans narrator clustering
+
+### Narrator Identification
+- **FAISS** — Vector similarity search for face embeddings
+  - IndexFlatIP for inner product similarity
+  - 512-dimensional face embeddings from DeepFace
+  - Auto-discovery of new narrators
+  - Persistent index with mapping to database IDs
+
+### Narrator Identification
+- **FAISS** — Vector similarity search for face embeddings
+- **DeepFace** — Face embedding extraction (512-dim vectors)
+- Auto-discovery of returning narrators across videos
 
 ### Transcription (ASR)
 - **OpenAI Whisper** (large-v3) — word-level timestamps, multilingual
@@ -204,6 +250,8 @@ open http://localhost:8000/docs
 
 | Table | Description |
 |-------|-------------|
+| `users` | User accounts (email, hashed password, admin flag) |
+| `narrators` | Known narrators with face embeddings |
 | `narratives` | Main narrative records |
 | `themes` | Theme tags (many-to-many with narratives) |
 | `narrative_themes` | Junction table |
@@ -234,6 +282,29 @@ Tests use an in-memory SQLite database for isolation.
 
 ---
 
+## Configuration
+
+Environment variables (see `.env.example`):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | — | PostgreSQL connection string |
+| `USE_SQLITE` | false | Use SQLite instead of PostgreSQL |
+| `REDIS_URL` | — | Redis connection for Celery/rate limiting |
+| `SECRET_KEY` | (dev key) | JWT signing key |
+| `WHISPER_MODEL` | base | Whisper model (tiny/base/small/medium/large) |
+| `WHISPER_DEVICE` | cpu | Device for Whisper (cpu/cuda) |
+| `ENABLE_FACIAL_ANALYSIS` | true | Enable facial analysis |
+| `ENABLE_AUDIO_ANALYSIS` | true | Enable audio analysis |
+| `ENABLE_TRANSCRIPTION` | true | Enable ASR transcription |
+| `ENABLE_FAISS_INDEXING` | true | Enable FAISS narrator matching |
+| `RATE_LIMIT_ENABLED` | true | Enable rate limiting |
+| `RATE_LIMIT_REQUESTS` | 100 | Max requests per window |
+| `LOG_LEVEL` | INFO | Logging level |
+| `LOG_FORMAT` | console | Log format (console/json) |
+
+---
+
 ## Production Notes
 
 Current implementation status:
@@ -245,9 +316,13 @@ Current implementation status:
 | Nginx reverse proxy | ✅ Complete |
 | Docker volumes | ✅ Complete |
 | Real ML implementations | ✅ Complete |
-| Celery task queue | 🔴 Redis ready, Celery not implemented |
-| JWT authentication | 🔴 Not implemented |
-| FAISS vector search | 🔴 Not implemented |
+| Celery task queue | ✅ Complete (Redis + Celery workers) |
+| JWT authentication | ✅ Complete (register/login/me/logout) |
+| FAISS vector search | ✅ Complete (narrator face matching) |
+| Rate limiting | ✅ Complete (Redis-based) |
+| Narrator identification | ✅ Complete (face recognition) |
+| Performance benchmarks | ✅ Complete |
+| GPU detection | ✅ Complete |
 
 ---
 

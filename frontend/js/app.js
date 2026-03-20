@@ -9,6 +9,9 @@ let isLoading = false;
 let currentNarrativeId = null;
 let filterTimeout = null;
 
+let currentMediaType = 'image';
+let uploadedMediaFile = null;
+
 function showLoading(show) {
   isLoading = show;
   const grid = document.getElementById('narrativeGrid');
@@ -177,11 +180,16 @@ function renderNarratives() {
     grid.innerHTML = `
       <div class="empty-state" style="grid-column:1/-1;text-align:center;padding:3rem;">
         <div style="font-family:'DM Mono',monospace;color:var(--mid);font-size:0.8rem;margin-bottom:1rem;">
-          ${Auth.isLoggedIn() ? "You haven't uploaded any narratives yet." : "No narratives found"}
+          ${Auth.isLoggedIn() ? "No narratives found. Register narrators or analyze videos to get started." : "No narratives found"}
         </div>
-        <button class="btn-primary" onclick="document.getElementById('upload').scrollIntoView({behavior:'smooth'})">
-          ${Auth.isLoggedIn() ? 'Record a Narrative' : 'Login to Record'}
-        </button>
+        <div style="display:flex;gap:1rem;justify-content:center;">
+          <button class="btn-primary" onclick="document.getElementById('register-narrator').scrollIntoView({behavior:'smooth'})">
+            ${Auth.isLoggedIn() ? 'Register Narrator' : 'Login to Register'}
+          </button>
+          <button class="btn-secondary" onclick="document.getElementById('upload').scrollIntoView({behavior:'smooth'})">
+            ${Auth.isLoggedIn() ? 'Analyze a Video' : 'Login to Analyze'}
+          </button>
+        </div>
       </div>
     `;
     return;
@@ -200,7 +208,10 @@ function renderNarratives() {
       </div>
       <div class="card-body">
         <div class="card-title">${n.title}</div>
-        <div class="card-narrator">${n.narrator_name} · ${n.location}</div>
+        <div class="card-narrator">
+          ${n.narrator_name} · ${n.location}
+          ${n.narrator_name.startsWith('Unknown') ? '<span class="unknown-badge">Auto-detected</span>' : ''}
+        </div>
         <div class="card-excerpt">"${n.excerpt}"</div>
         <div class="card-tags">
           ${n.themes.map(t => `<span class="tag">${t}</span>`).join('')}
@@ -445,12 +456,14 @@ function handleFileSelect(e) {
     return;
   }
   
+  uploadedVideoFile = file;
+  
   const el = document.getElementById('selectedFile');
   el.innerHTML = `✓ ${file.name} (${formatFileSize(file.size)}) <button class="remove-file" onclick="removeFile(event)">×</button>`;
   el.classList.add('show');
   
   document.getElementById('dropzone').classList.add('has-file');
-  document.getElementById('nextStep1').disabled = false;
+  document.getElementById('analyzeVideoBtn').disabled = false;
   clearUploadError();
 }
 
@@ -460,7 +473,8 @@ function removeFile(e) {
   document.getElementById('selectedFile').classList.remove('show');
   document.getElementById('selectedFile').innerHTML = '';
   document.getElementById('dropzone').classList.remove('has-file');
-  document.getElementById('nextStep1').disabled = true;
+  document.getElementById('analyzeVideoBtn').disabled = true;
+  uploadedVideoFile = null;
 }
 
 function formatFileSize(bytes) {
@@ -482,6 +496,9 @@ function clearUploadError() {
 }
 
 let currentStep = 1;
+let currentNarrativeId = null;
+let uploadedVideoFile = null;
+let analysisResult = null;
 
 function goToStep(step) {
   if (step === 2 && !document.getElementById('videoInput').files[0]) {
@@ -517,6 +534,125 @@ function validateForm() {
   titleError.style.display = 'none';
   titleInput.classList.remove('error');
   return true;
+}
+
+async function analyzeVideo() {
+  const isAuthenticated = await Auth.requireAuth(true);
+  if (!isAuthenticated) {
+    return;
+  }
+  
+  if (!uploadedVideoFile) {
+    Auth.showNotification('Please select a video file to analyze.', 'error');
+    return;
+  }
+  
+  goToStep(2);
+  
+  const formData = new FormData();
+  formData.append('video', uploadedVideoFile);
+  formData.append('title', 'Uploading for analysis...');
+  formData.append('narrator_name', 'Unknown');
+  formData.append('location', '');
+  formData.append('themes', '');
+  formData.append('transcript', '');
+  
+  try {
+    const response = await API.narratives.upload(formData);
+    currentNarrativeId = response.narrative_id;
+    
+    await pollProcessingStatusWithUI(currentNarrativeId);
+    
+    await showReviewStep(currentNarrativeId);
+    
+  } catch (error) {
+    console.error('Analysis failed:', error);
+    updateProcessingDisplay('Analysis failed', error.message, 0, true);
+    setTimeout(() => goToStep(1), 3000);
+  }
+}
+
+async function showReviewStep(narrativeId) {
+  try {
+    const response = await API.narratives.get(narrativeId);
+    analysisResult = response;
+    
+    document.getElementById('fTitle').value = response.title || '';
+    
+    const detectedNarrator = document.getElementById('detectedNarrator');
+    const narratorName = response.narrator_name || 'Unknown';
+    const confidence = response.narrator_match_confidence || 0;
+    
+    detectedNarrator.innerHTML = `
+      <span class="detected-name">${narratorName} ${narratorName.startsWith('Unknown') ? '<span class="unknown-badge">Auto-detected</span>' : ''}</span>
+      <span class="detected-confidence">Confidence: ${Math.round(confidence * 100)}%</span>
+      <button class="btn-change" onclick="showNarratorSelector()">Change</button>
+    `;
+    
+    document.getElementById('fLocation').value = response.location || '';
+    
+    const themes = response.themes?.map(t => typeof t === 'string' ? t : t.name).join(', ') || '';
+    document.getElementById('fThemes').value = themes;
+    
+    const transcript = response.transcript?.text || '';
+    document.getElementById('fTranscript').value = transcript;
+    
+    const wordCount = response.transcript?.word_count || 0;
+    const transcriptConfidence = response.transcript?.confidence || 0;
+    document.getElementById('transcriptMeta').innerHTML = `
+      <span id="transcriptWordCount">${wordCount} words</span>
+      <span id="transcriptConfidence">Confidence: ${Math.round(transcriptConfidence * 100)}%</span>
+    `;
+    
+    goToStep(3);
+    
+  } catch (error) {
+    console.error('Failed to load analysis results:', error);
+    Auth.showNotification('Failed to load analysis results', 'error');
+    goToStep(1);
+  }
+}
+
+async function confirmNarrative() {
+  if (!validateForm()) {
+    return;
+  }
+  
+  const title = document.getElementById('fTitle').value.trim();
+  const narrator = document.getElementById('fNarrator').value.trim();
+  const location = document.getElementById('fLocation').value.trim();
+  const themes = document.getElementById('fThemes').value.trim();
+  const transcript = document.getElementById('fTranscript').value.trim();
+  
+  try {
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('narrator_name', narrator);
+    formData.append('location', location);
+    formData.append('themes', themes);
+    formData.append('transcript', transcript);
+    
+    Auth.showNotification('Narrative archived successfully!', 'success');
+    
+    await loadNarratives();
+    
+    setTimeout(() => {
+      document.getElementById('archive').scrollIntoView({behavior:'smooth'});
+      resetForm();
+      goToStep(1);
+    }, 1000);
+    
+  } catch (error) {
+    console.error('Failed to confirm narrative:', error);
+    Auth.showNotification('Failed to archive narrative', 'error');
+  }
+}
+
+function showNarratorSelector() {
+  const input = document.getElementById('fNarrator');
+  input.style.display = 'block';
+  input.value = '';
+  input.focus();
 }
 
 async function submitNarrative() {
@@ -731,6 +867,186 @@ async function pollProcessingStatus(narrativeId) {
   }
   
   throw new Error('Processing timed out');
+}
+
+function switchMediaTab(type) {
+  currentMediaType = type;
+  
+  document.querySelectorAll('.media-tab').forEach(tab => {
+    tab.classList.remove('active');
+    if (tab.dataset.type === type) tab.classList.add('active');
+  });
+  
+  const groups = {
+    'image': 'imageUploadGroup',
+    'video': 'videoUploadGroup',
+    'audio': 'audioUploadGroup'
+  };
+  
+  Object.entries(groups).forEach(([key, groupId]) => {
+    const el = document.getElementById(groupId);
+    if (el) el.style.display = key === type ? 'block' : 'none';
+  });
+  
+  uploadedMediaFile = null;
+  ['selectedImage', 'selectedRegVideo', 'selectedAudio'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.classList.remove('show');
+      el.innerHTML = '';
+    }
+  });
+  
+  document.getElementById('registerBtn').disabled = true;
+}
+
+function handleMediaSelect(event, type) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const maxSize = 2 * 1024 * 1024 * 1024;
+  if (file.size > maxSize) {
+    showRegisterError('File too large. Maximum size is 2GB.');
+    return;
+  }
+  
+  let validTypes = [];
+  if (type === 'image') {
+    validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  } else if (type === 'video') {
+    validTypes = ['video/mp4', 'video/quicktime', 'video/webm'];
+  } else if (type === 'audio') {
+    validTypes = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/m4a'];
+  }
+  
+  if (!validTypes.includes(file.type)) {
+    showRegisterError(`Invalid file type. Please upload ${type.toUpperCase()} files.`);
+    return;
+  }
+  
+  uploadedMediaFile = file;
+  
+  const selectedIds = {
+    'image': 'selectedImage',
+    'video': 'selectedRegVideo',
+    'audio': 'selectedAudio'
+  };
+  
+  const el = document.getElementById(selectedIds[type]);
+  el.innerHTML = `✓ ${file.name} (${formatFileSize(file.size)}) <button class="remove-file" onclick="removeMedia(event, '${type}')">×</button>`;
+  el.classList.add('show');
+  
+  document.getElementById('registerBtn').disabled = false;
+  clearRegisterError();
+}
+
+function removeMedia(event, type) {
+  event.stopPropagation();
+  
+  const inputIds = {
+    'image': 'imageInput',
+    'video': 'regVideoInput',
+    'audio': 'audioInput'
+  };
+  
+  const selectedIds = {
+    'image': 'selectedImage',
+    'video': 'selectedRegVideo',
+    'audio': 'selectedAudio'
+  };
+  
+  document.getElementById(inputIds[type]).value = '';
+  document.getElementById(selectedIds[type]).classList.remove('show');
+  document.getElementById(selectedIds[type]).innerHTML = '';
+  
+  uploadedMediaFile = null;
+  document.getElementById('registerBtn').disabled = true;
+}
+
+function showRegisterError(message) {
+  const el = document.getElementById('registerStatus');
+  el.textContent = message;
+  el.className = 'register-status error';
+}
+
+function clearRegisterError() {
+  const el = document.getElementById('registerStatus');
+  el.classList.remove('error');
+  el.textContent = '';
+}
+
+async function registerNarrator() {
+  const isAuthenticated = await Auth.requireAuth(true);
+  if (!isAuthenticated) {
+    return;
+  }
+  
+  const name = document.getElementById('regNarratorName').value.trim();
+  if (!name) {
+    showRegisterError('Narrator name is required.');
+    return;
+  }
+  
+  if (!uploadedMediaFile) {
+    showRegisterError('Please upload a reference media file.');
+    return;
+  }
+  
+  const location = document.getElementById('regLocation').value.trim();
+  const bio = document.getElementById('regBio').value.trim();
+  
+  const formData = new FormData();
+  formData.append('name', name);
+  formData.append('reference_image', uploadedMediaFile);
+  formData.append('location', location);
+  formData.append('bio', bio);
+  
+  try {
+    document.getElementById('registerBtn').disabled = true;
+    document.getElementById('registerBtn').textContent = 'Registering...';
+    
+    const response = await API.narrators.register(formData);
+    
+    document.getElementById('registerStatus').innerHTML = `
+      <strong>✓ Success!</strong> Narrator "${name}" has been registered and added to the identification database.
+    `;
+    document.getElementById('registerStatus').className = 'register-status success';
+    
+    document.getElementById('registerBtn').textContent = 'Register Narrator';
+    document.getElementById('registerBtn').disabled = false;
+    
+    Auth.showNotification(`Narrator "${name}" registered successfully!`, 'success');
+    
+    setTimeout(() => {
+      document.getElementById('archive').scrollIntoView({behavior:'smooth'});
+      resetRegisterForm();
+    }, 2000);
+    
+  } catch (error) {
+    console.error('Registration failed:', error);
+    showRegisterError(error.message || 'Registration failed. Please try again.');
+    document.getElementById('registerBtn').textContent = 'Register Narrator';
+    document.getElementById('registerBtn').disabled = false;
+  }
+}
+
+function resetRegisterForm() {
+  document.getElementById('regNarratorName').value = '';
+  document.getElementById('regLocation').value = '';
+  document.getElementById('regBio').value = '';
+  
+  ['imageInput', 'regVideoInput', 'audioInput'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  
+  ['selectedImage', 'selectedRegVideo', 'selectedAudio'].forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.remove('show');
+    el.innerHTML = '';
+  });
+  
+  switchMediaTab('image');
+  clearRegisterError();
 }
 
 function resetForm() {

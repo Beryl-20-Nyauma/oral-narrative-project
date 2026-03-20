@@ -56,17 +56,32 @@ async def init_db():
     from app.core.database import init_db as db_init, async_session_factory, get_database_type
     
     if async_session_factory is None:
-        print("⚠️ No database configured")
+        logger.warning("No database configured")
         return
     
-    await db_init()
+    try:
+        await db_init()
+        logger.info("Database tables created")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        raise
     
     from app.core.seed import seed_database, is_database_seeded
-    async with async_session_factory() as db:
-        if not await is_database_seeded(db):
-            print("🌱 Seeding sample data...")
-            count = await seed_database(db)
-            print(f"✅ Seeded {count} sample narratives")
+    try:
+        async with async_session_factory() as db:
+            if settings.seed_sample_data and not await is_database_seeded(db):
+                logger.info("Seeding sample data...")
+                count = await seed_database(db)
+                logger.info(f"Seeded {count} sample narratives")
+                
+                try:
+                    from app.core.seed import seed_demo_user
+                    demo_user = await seed_demo_user(db)
+                    logger.info(f"Created demo user: {demo_user.email}")
+                except Exception as e:
+                    logger.warning(f"Could not create demo user: {e}")
+    except Exception as e:
+        logger.error(f"Database seeding failed: {e}")
 
 
 async def init_rate_limiter():

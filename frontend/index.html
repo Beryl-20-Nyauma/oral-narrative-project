@@ -37,7 +37,8 @@
       <h1>Where voices become <em>living history</em></h1>
       <p>A multimodal AI system that captures not just the words of oral narratives, but the identity, emotion, and vocal signature of every storyteller.</p>
       <div class="hero-actions">
-        <button class="btn-primary" onclick="document.getElementById('upload').scrollIntoView({behavior:'smooth'})">Record a Narrative</button>
+        <button class="btn-primary" onclick="document.getElementById('register-narrator').scrollIntoView({behavior:'smooth'})">Register Narrator</button>
+        <button class="btn-secondary" onclick="document.getElementById('upload').scrollIntoView({behavior:'smooth'})">Analyze a Video</button>
         <button class="btn-secondary" onclick="document.getElementById('archive').scrollIntoView({behavior:'smooth'})">Browse Archive</button>
       </div>
     </div>
@@ -176,10 +177,106 @@
     <div class="narrative-grid" id="narrativeGrid" role="list" aria-label="Narratives"></div>
   </section>
 
+  <section id="register-narrator">
+    <div class="section-header">
+      <h2 class="section-title">Register a Narrator</h2>
+      <span class="section-count">Add narrators to the identification database</span>
+    </div>
+    <div class="two-column-layout">
+      <div class="register-info">
+        <h3>Build the Narrator Database</h3>
+        <p>Register known storytellers so the system can automatically identify them in future videos.</p>
+        
+        <div class="info-cards">
+          <div class="info-card">
+            <div class="info-icon">📸</div>
+            <h4>Upload Photo</h4>
+            <p>Upload a clear face photo for best identification results</p>
+          </div>
+          <div class="info-card">
+            <div class="info-icon">🎬</div>
+            <h4>Or Upload Video</h4>
+            <p>Upload a short video clip - system will extract the face</p>
+          </div>
+          <div class="info-card">
+            <div class="info-icon">🎙</div>
+            <h4>Or Upload Audio</h4>
+            <p>Upload audio recording - voice patterns help identification</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="register-form">
+        <div class="form-group">
+          <label class="form-label">Narrator Name *</label>
+          <input class="form-input" type="text" id="regNarratorName" placeholder="e.g. Mama Fatima">
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Upload Reference Media *</label>
+          <div class="media-upload-tabs">
+            <button class="media-tab active" data-type="image" onclick="switchMediaTab('image')">Photo</button>
+            <button class="media-tab" data-type="video" onclick="switchMediaTab('video')">Video</button>
+            <button class="media-tab" data-type="audio" onclick="switchMediaTab('audio')">Audio</button>
+          </div>
+        </div>
+        
+        <div class="form-group" id="imageUploadGroup">
+          <label class="form-label">Reference Image</label>
+          <div class="upload-dropzone" id="imageDropzone">
+            <input type="file" id="imageInput" accept="image/*" onchange="handleMediaSelect(event, 'image')">
+            <div class="upload-icon">📸</div>
+            <div class="upload-text">Drop photo here, or click to browse</div>
+            <div class="upload-hint">JPG, PNG, WebP — recommended size 400x400px</div>
+            <div id="selectedImage" class="selected-file"></div>
+          </div>
+        </div>
+        
+        <div class="form-group" id="videoUploadGroup" style="display:none;">
+          <label class="form-label">Reference Video</label>
+          <div class="upload-dropzone" id="videoDropzone">
+            <input type="file" id="regVideoInput" accept="video/*" onchange="handleMediaSelect(event, 'video')">
+            <div class="upload-icon">🎬</div>
+            <div class="upload-text">Drop video here, or click to browse</div>
+            <div class="upload-hint">MP4, MOV — will extract face automatically</div>
+            <div id="selectedRegVideo" class="selected-file"></div>
+          </div>
+        </div>
+        
+        <div class="form-group" id="audioUploadGroup" style="display:none;">
+          <label class="form-label">Reference Audio</label>
+          <div class="upload-dropzone" id="audioDropzone">
+            <input type="file" id="audioInput" accept="audio/*" onchange="handleMediaSelect(event, 'audio')">
+            <div class="upload-icon">🎙</div>
+            <div class="upload-text">Drop audio here, or click to browse</div>
+            <div class="upload-hint">MP3, WAV, OGG — voice pattern analysis</div>
+            <div id="selectedAudio" class="selected-file"></div>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Location (optional)</label>
+          <input class="form-input" type="text" id="regLocation" placeholder="e.g. Kakamega, Kenya">
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Notes / Bio (optional)</label>
+          <textarea class="form-textarea" id="regBio" placeholder="Any additional information about this narrator..." rows="4"></textarea>
+        </div>
+        
+        <div class="form-actions">
+          <button class="btn-primary" onclick="registerNarrator()" id="registerBtn" disabled>Register Narrator</button>
+        </div>
+        
+        <div class="register-status" id="registerStatus"></div>
+      </div>
+    </div>
+  </section>
+
   <section id="upload">
     <div class="section-header">
-      <h2 class="section-title">Record a New Narrative</h2>
-      <span class="section-count">Full multimodal analysis on upload</span>
+      <h2 class="section-title">Analyze a Video</h2>
+      <span class="section-count">Auto-extract identity, emotion, and content</span>
     </div>
     <div id="processingBanner" class="processing-banner">
       <div class="processing-spinner"></div>
@@ -196,11 +293,11 @@
         </div>
         <div class="upload-step" data-step="2">
           <span class="step-number">2</span>
-          <span class="step-label">Add Details</span>
+          <span class="step-label">Analyzing</span>
         </div>
         <div class="upload-step" data-step="3">
           <span class="step-number">3</span>
-          <span class="step-label">Processing</span>
+          <span class="step-label">Review & Confirm</span>
         </div>
       </div>
       <div class="upload-step-content" id="step1Content">
@@ -213,11 +310,31 @@
         </div>
         <div class="upload-error" id="uploadError"></div>
         <div class="step-nav">
-          <button class="btn-primary" onclick="goToStep(2)" id="nextStep1" disabled>Continue</button>
+          <button class="btn-primary" onclick="analyzeVideo()" id="analyzeVideoBtn" disabled>Analyze Video</button>
         </div>
       </div>
       <div class="upload-step-content" id="step2Content" style="display:none;">
-        <div id="upload-form" class="analysis-panel" style="border:none;padding:0;background:transparent;">
+        <div class="processing-display">
+          <div class="processing-animation">
+            <div class="processing-ring"></div>
+            <div class="processing-icon">🎬</div>
+          </div>
+          <h3 id="processingStage">Processing your video...</h3>
+          <p id="processingDesc">Extracting face, voice, and content analysis</p>
+          <div class="processing-progress">
+            <div class="progress-bar-wrap">
+              <div class="progress-bar-fill" id="stepProgressFill"></div>
+            </div>
+            <span class="progress-pct" id="progressPct">0%</span>
+          </div>
+        </div>
+      </div>
+      <div class="upload-step-content" id="step3Content" style="display:none;">
+        <div id="review-form" class="analysis-panel">
+          <div class="review-header">
+            <h3>Analysis Complete!</h3>
+            <p>Review and edit the extracted details below</p>
+          </div>
           <div class="upload-form">
             <div class="form-group">
               <label class="form-label">Narrative Title *</label>
@@ -225,33 +342,39 @@
               <span class="form-error" id="fTitleError"></span>
             </div>
             <div class="form-group">
-              <label class="form-label">Narrator Name</label>
-              <input class="form-input" type="text" id="fNarrator" placeholder="e.g. Kirongosi A">
+              <label class="form-label">Detected Narrator</label>
+              <div class="narrator-detected" id="detectedNarrator">
+                <span class="detected-name">Unknown #1</span>
+                <span class="detected-confidence">Confidence: 85%</span>
+                <button class="btn-change" onclick="showNarratorSelector()">Change</button>
+              </div>
+              <input class="form-input" type="text" id="fNarrator" placeholder="e.g. Kirongosi A" style="display:none;">
             </div>
             <div class="form-group">
               <label class="form-label">Location</label>
               <input class="form-input" type="text" id="fLocation" placeholder="e.g. Kakamega, Kenya">
             </div>
             <div class="form-group">
-              <label class="form-label">Themes (comma-separated)</label>
+              <label class="form-label">Detected Themes</label>
               <input class="form-input" type="text" id="fThemes" placeholder="memory, water, community">
             </div>
             <div class="form-group full">
-              <label class="form-label">Transcript / Notes (optional)</label>
-              <textarea class="form-textarea" id="fTranscript" placeholder="Paste a transcript or brief summary of the narrative…"></textarea>
+              <label class="form-label">Auto-generated Transcript</label>
+              <textarea class="form-textarea" id="fTranscript" placeholder="Transcription will appear here..." rows="6"></textarea>
+              <div class="transcript-meta" id="transcriptMeta">
+                <span id="transcriptWordCount">0 words</span>
+                <span id="transcriptConfidence">Confidence: 95%</span>
+              </div>
             </div>
           </div>
         </div>
         <div class="step-nav">
-          <button class="btn-secondary" onclick="goToStep(1)">Back</button>
-          <button class="btn-primary" onclick="submitNarrative()">Analyze & Archive Narrative</button>
+          <button class="btn-secondary" onclick="goToStep(1)">Upload New Video</button>
+          <button class="btn-primary" onclick="confirmNarrative()">Confirm & Archive</button>
         </div>
       </div>
-      <div class="upload-step-content" id="step3Content" style="display:none;">
-        <div class="processing-display">
-          <div class="processing-animation">
-            <div class="processing-ring"></div>
-            <div class="processing-icon">🎬</div>
+    </div>
+  </section>
           </div>
           <h3 id="processingStage">Processing your narrative...</h3>
           <p id="processingDesc">This may take a few minutes depending on video length.</p>
