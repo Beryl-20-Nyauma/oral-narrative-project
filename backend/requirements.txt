@@ -1,5 +1,6 @@
 # Oral Narrative Preservation System - Python Dependencies
 # Install: pip install -r requirements.txt
+# Optimized for standard mode (~1.5GB total with CPU-only PyTorch)
 
 # ── Web Framework ──────────────────────────────────────────
 fastapi>=0.110.0
@@ -8,62 +9,57 @@ python-multipart>=0.0.9
 
 # ── Computer Vision ────────────────────────────────────────
 opencv-python-headless>=4.9.0
-deepface>=0.0.92          # Facial attribute analysis (emotion, age, gender, identity)
-# tf-keras>=2.15.0          # Required by DeepFace backend
+deepface>=0.0.92
+tf-keras>=2.16.0
 
 # ── Audio Processing ───────────────────────────────────────
-librosa>=0.10.1           # Pitch, MFCC, spectral features, chroma
-soundfile>=0.12.1         # Audio I/O
-webrtcvad>=2.0.10         # Voice Activity Detection
-# pyaudio>=0.2.14        # Real-time audio capture (requires PortAudio system lib - install separately if needed)
+librosa>=0.10.1
+soundfile>=0.12.1
+webrtcvad>=2.0.10
 
-# ── Machine Learning ───────────────────────────────────────
-torch>=2.2.0              # PyTorch for multimodal fusion model
-torchvision>=0.17.0       # Vision transforms
-torchaudio>=2.2.0         # Audio transforms
-grad-cam>=1.5.0           # Gradient-weighted CAM visualization
-scikit-learn>=1.4.0       # Feature engineering, preprocessing, scaling
+# ── Machine Learning (CPU-only PyTorch) ────────────────────
+# CPU-only PyTorch (saves ~1.5GB vs CUDA version)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.2.0
+scikit-learn>=1.4.0
 numpy>=1.26.0
 pandas>=2.2.0
-faiss-cpu>=1.7.4          # Vector similarity search for face embeddings
+faiss-cpu>=1.7.4
 
 # ── Database & Storage ─────────────────────────────────────
-sqlalchemy>=2.0.0         # ORM (production: replace in-memory dict)
-alembic>=1.13.0           # DB migrations
-psycopg2-binary>=2.9.9    # PostgreSQL adapter
-asyncpg>=0.29.0           # Async PostgreSQL driver
-pymongo>=4.6.0            # MongoDB (optional: for document storage)
-redis>=5.0.0              # Caching layer (optional)
-aiosqlite>=0.19.0         # Async SQLite (for testing)
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+psycopg2-binary>=2.9.9
+asyncpg>=0.29.0
+redis>=5.0.0
+aiosqlite>=0.19.0
 
 # ── Speech Recognition ─────────────────────────────────────
-openai-whisper>=20231117  # ASR transcription
-# faster-whisper>=0.10.0  # Drop-in accelerated Whisper alternative
+faster-whisper>=1.0.0
 
 # ── Utilities ──────────────────────────────────────────────
 pydantic>=2.5.0
-pydantic-settings>=2.1.0   # Environment config
-python-dotenv>=1.0.0       # .env file loading
-python-jose>=3.3.0        # JWT auth tokens
-passlib>=1.7.4            # Password hashing
-bcrypt>=4.0.0             # Password hashing backend
-email-validator>=2.1.0    # Email validation for pydantic
+pydantic-settings>=2.1.0
+python-dotenv>=1.0.0
+python-jose>=3.3.0
+passlib>=1.7.4
+bcrypt>=4.0.0
+email-validator>=2.1.0
 httpx>=0.27.0
 aiofiles>=23.2.1
 tqdm>=4.66.0
 Pillow>=10.2.0
 
 # ── Visualization ──────────────────────────────────────────
-matplotlib>=3.8.0         # Grad-CAM plots
-seaborn>=0.13.0
+matplotlib>=3.8.0
 
 # ── Production extras ──────────────────────────────────────
-celery>=5.3.0              # Distributed task queue for heavy processing
-flower>=2.0.0              # Celery monitoring UI
-fastapi-limiter>=0.1.6     # Rate limiting
-psutil>=5.9.0              # System monitoring for benchmarks
+celery>=5.3.0
+flower>=2.0.0
+fastapi-limiter>=0.1.6
+psutil>=5.9.0
 
-# ── Testing (optional) ─────────────────────────────────────
-pytest>=8.0.0              # Testing framework
-pytest-asyncio>=0.23.0     # Async test support
-pytest-cov>=4.1.0          # Coverage plugin
+# ── Testing ────────────────────────────────────────────────
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0

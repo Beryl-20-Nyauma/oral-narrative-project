@@ -1,11 +1,8 @@
-"""Transcription service using OpenAI Whisper ASR."""
+"""Transcription service using faster-whisper (CTranslate2)."""
 
 import logging
 import threading
 from typing import Dict, Any, Optional, List
-
-import whisper
-from whisper import Whisper
 
 logger = logging.getLogger(__name__)
 
@@ -14,15 +11,34 @@ class WhisperTranscriber:
     """
     Production-grade Whisper ASR transcription service.
     
-    Uses singleton pattern with lazy loading to minimize memory footprint.
-    Thread-safe model initialization.
+    Uses faster-whisper (CTranslate2) for better performance and smaller footprint.
+    Thread-safe singleton with lazy loading.
     """
     
-    _model: Optional[Whisper] = None
+    _model = None
     _model_name: str = "base"
+    _device: str = "cpu"
+    _compute_type: str = "int8"
     _lock: threading.Lock = threading.Lock()
+    _configured: bool = False
     
-    VALID_MODELS = ("tiny", "base", "small", "medium", "large", "large-v2", "large-v3")
+    VALID_MODELS = ("tiny", "base", "small", "medium", "large-v2", "large-v3")
+    
+    @classmethod
+    def configure_from_settings(cls) -> None:
+        """Load configuration from settings."""
+        if cls._configured:
+            return
+        try:
+            from config import get_settings
+            settings = get_settings()
+            cls._model_name = settings.whisper_model
+            cls._device = settings.whisper_device
+            cls._compute_type = settings.whisper_compute_type
+            cls._configured = True
+            logger.info(f"Whisper configured: model={cls._model_name}, device={cls._device}, compute_type={cls._compute_type}")
+        except Exception as e:
+            logger.warning(f"Could not load settings, using defaults: {e}")
     
     @classmethod
     def set_model_name(cls, model_name: str) -> None:
@@ -30,7 +46,7 @@ class WhisperTranscriber:
         Set the model name to use. Must be called before first transcription.
         
         Args:
-            model_name: One of tiny, base, small, medium, large, large-v2, large-v3
+            model_name: One of tiny, base, small, medium, large-v2, large-v3
         """
         if model_name not in cls.VALID_MODELS:
             raise ValueError(f"Invalid model '{model_name}'. Must be one of {cls.VALID_MODELS}")
@@ -41,21 +57,29 @@ class WhisperTranscriber:
         logger.info(f"Whisper model set to: {model_name}")
     
     @classmethod
-    def get_model(cls) -> Whisper:
+    def get_model(cls):
         """
-        Get or lazily load the Whisper model.
+        Get or lazily load the faster-whisper model.
         
         Thread-safe singleton initialization.
         
         Returns:
-            Loaded Whisper model instance
+            Loaded faster-whisper WhisperModel instance
         """
         if cls._model is None:
             with cls._lock:
                 if cls._model is None:
-                    logger.info(f"Loading Whisper model: {cls._model_name}")
-                    cls._model = whisper.load_model(cls._model_name)
-                    logger.info(f"Whisper model loaded successfully")
+                    if not cls._configured:
+                        cls.configure_from_settings()
+                    
+                    from faster_whisper import WhisperModel
+                    logger.info(f"Loading faster-whisper model: {cls._model_name}")
+                    cls._model = WhisperModel(
+                        cls._model_name,
+                        device=cls._device,
+                        compute_type=cls._compute_type
+                    )
+                    logger.info(f"faster-whisper model loaded successfully")
         return cls._model
     
     @classmethod
@@ -74,7 +98,7 @@ class WhisperTranscriber:
         beam_size: int = 5,
     ) -> Dict[str, Any]:
         """
-        Transcribe audio file using Whisper ASR.
+        Transcribe audio file using faster-whisper ASR.
         
         Args:
             audio_path: Path to audio file (WAV, MP3, M4A, etc.)
@@ -111,27 +135,24 @@ class WhisperTranscriber:
         try:
             model = cls.get_model()
             
-            options = {
-                "task": task,
-                "temperature": temperature,
-                "best_of": best_of,
-                "beam_size": beam_size,
-            }
-            if language:
-                options["language"] = language
+            segments_gen, info = model.transcribe(
+                audio_path,
+                language=language,
+                task=task,
+                temperature=temperature,
+                best_of=best_of,
+                beam_size=beam_size,
+            )
             
-            result = model.transcribe(audio_path, **options)
+            segments = cls._process_segments(list(segments_gen))
             
-            text = result.get("text", "").strip()
+            text = " ".join(seg["text"] for seg in segments)
             word_count = len(text.split())
             
-            segments_raw = result.get("segments", [])
-            segments = cls._process_segments(segments_raw)
+            language_code = info.language if hasattr(info, 'language') else language or "unknown"
+            language_prob = info.language_probability if hasattr(info, 'language_probability') else 1.0
             
-            language_code = result.get("language", "unknown")
-            language_prob = result.get("language_probability", 1.0)
-            
-            confidence = cls._calculate_confidence(segments_raw)
+            confidence = cls._calculate_confidence(segments)
             duration_sec = segments[-1]["end"] if segments else 0.0
             
             logger.info(
@@ -147,7 +168,7 @@ class WhisperTranscriber:
                 "segments": segments,
                 "confidence": confidence,
                 "duration_sec": round(duration_sec, 2),
-                "model": f"whisper-{cls._model_name}",
+                "model": f"faster-whisper-{cls._model_name}",
             }
             
         except Exception as e:
@@ -155,27 +176,27 @@ class WhisperTranscriber:
             raise RuntimeError(f"Transcription failed: {e}") from e
     
     @classmethod
-    def _process_segments(cls, segments: List[Dict]) -> List[Dict[str, Any]]:
+    def _process_segments(cls, segments: List) -> List[Dict[str, Any]]:
         """
-        Process raw Whisper segments into clean format.
+        Process raw faster-whisper segments into clean format.
         
         Args:
-            segments: Raw segments from Whisper output
+            segments: Raw segments from faster-whisper output
         
         Returns:
             Cleaned list of segment dicts with start, end, text, confidence
         """
         processed = []
         for seg in segments:
-            if not seg.get("text", "").strip():
+            if not seg.text or not seg.text.strip():
                 continue
             
-            start = round(seg.get("start", 0), 2)
-            end = round(seg.get("end", 0), 2)
-            text = seg.get("text", "").strip()
-            avg_logprob = seg.get("avg_logprob", 0)
-            no_speech_prob = seg.get("no_speech_prob", 0)
+            start = round(seg.start, 2)
+            end = round(seg.end, 2)
+            text = seg.text.strip()
             
+            avg_logprob = getattr(seg, 'avg_logprob', -0.5)
+            no_speech_prob = getattr(seg, 'no_speech_prob', 0.0)
             confidence = cls._segment_confidence(avg_logprob, no_speech_prob)
             
             processed.append({
@@ -183,7 +204,7 @@ class WhisperTranscriber:
                 "end": end,
                 "text": text,
                 "confidence": round(confidence, 3),
-                "tokens": seg.get("tokens", []),
+                "tokens": list(seg.tokens) if hasattr(seg, 'tokens') else [],
             })
         
         return processed
@@ -193,11 +214,8 @@ class WhisperTranscriber:
         """
         Calculate overall transcription confidence from segment metrics.
         
-        Uses average log probability, normalized to 0-1 range.
-        Log probabilities typically range from -1 to 0.
-        
         Args:
-            segments: Raw segments from Whisper
+            segments: Processed segments
         
         Returns:
             Confidence score between 0 and 1
@@ -205,20 +223,8 @@ class WhisperTranscriber:
         if not segments:
             return 0.0
         
-        logprobs = []
-        for seg in segments:
-            if seg.get("text", "").strip():
-                logprobs.append(seg.get("avg_logprob", -1))
-        
-        if not logprobs:
-            return 0.0
-        
-        avg_logprob = sum(logprobs) / len(logprobs)
-        
-        confidence = (avg_logprob + 1) / 1
-        confidence = max(0.0, min(1.0, confidence))
-        
-        return round(confidence, 2)
+        confidences = [seg.get("confidence", 0.5) for seg in segments]
+        return round(sum(confidences) / len(confidences), 2)
     
     @classmethod
     def _segment_confidence(cls, avg_logprob: float, no_speech_prob: float) -> float:
@@ -252,7 +258,7 @@ def transcribe_audio(
     Args:
         audio_path: Path to audio file
         language: Optional language code (e.g., 'en', 'sw')
-        model: Whisper model size (tiny, base, small, medium, large)
+        model: Whisper model size (tiny, base, small, medium, large-v2, large-v3)
     
     Returns:
         Transcription result dict
