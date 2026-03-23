@@ -2,6 +2,8 @@
 
 import os
 import uuid
+import logging
+from pathlib import Path
 from typing import AsyncGenerator, Optional, Any
 from sqlalchemy import String, TypeDecorator
 from sqlalchemy.ext.declarative import declarative_base
@@ -10,6 +12,9 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     AsyncSession,
 )
+from sqlalchemy.pool import StaticPool
+
+logger = logging.getLogger(__name__)
 
 
 class GUID(TypeDecorator):
@@ -46,14 +51,31 @@ class GUID(TypeDecorator):
 
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
+USE_SQLITE = os.getenv("USE_SQLITE", "false").lower() == "true"
+SQLITE_PATH = os.getenv("SQLITE_PATH", "./data/oral_narratives.db")
 
 engine = None
 async_session_factory: Optional[async_sessionmaker[AsyncSession]] = None
+_db_type: str = "none"
 
-if DATABASE_URL:
+if USE_SQLITE or (not DATABASE_URL):
+    Path(SQLITE_PATH).parent.mkdir(parents=True, exist_ok=True)
+    sqlite_url = f"sqlite+aiosqlite:///{SQLITE_PATH}"
+    engine = create_async_engine(
+        sqlite_url,
+        echo=False,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    _db_type = "sqlite"
+    logger.info(f"Using SQLite database: {SQLITE_PATH}")
+elif DATABASE_URL:
     async_url = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
     engine = create_async_engine(async_url, echo=False, pool_pre_ping=True)
     async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    _db_type = "postgresql"
+    logger.info("Using PostgreSQL database")
 
 Base = declarative_base()
 
@@ -75,3 +97,8 @@ async def init_db():
     if engine:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+
+
+def get_database_type() -> str:
+    """Return current database type."""
+    return _db_type

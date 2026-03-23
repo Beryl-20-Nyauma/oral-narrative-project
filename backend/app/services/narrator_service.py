@@ -3,7 +3,7 @@
 import logging
 import numpy as np
 from typing import Dict, Any, Optional, List, Tuple
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 
@@ -11,7 +11,7 @@ from app.models.narrative import Narrator, Narrative
 
 logger = logging.getLogger(__name__)
 
-SIMILARITY_THRESHOLD = 0.85
+SIMILARITY_THRESHOLD = 0.75
 
 
 async def identify_or_create_narrator(
@@ -88,6 +88,72 @@ async def identify_or_create_narrator(
     return new_narrator, 1.0
 
 
+async def extract_and_save_face_thumbnail(
+    video_path: str
+) -> Optional[str]:
+    """
+    Extract and save face thumbnail from video.
+    
+    Args:
+        video_path: Path to video file
+    
+    Returns:
+        Path to saved face thumbnail or None if no face detected
+    """
+    from pathlib import Path
+    from config import get_settings
+    
+    settings = get_settings()
+    storage_dir = Path(settings.storage_dir)
+    narrators_dir = storage_dir / "narrators"
+    narrators_dir.mkdir(parents=True, exist_ok=True)
+    
+    import uuid
+    
+    try:
+        import cv2
+        from deepface import DeepFace
+        
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            return None
+        
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        sample_frame = int(total_frames * 0.5)
+        
+        cap.set(cv2.CAP_PROP_POS_FRAMES, sample_frame)
+        ret, frame = cap.read()
+        cap.release()
+        
+        if not ret:
+            return None
+        
+        try:
+            faces = DeepFace.extract_faces(
+                frame,
+                enforce_detection=False,
+                detector_backend="opencv"
+            )
+            
+            if faces and len(faces) > 0:
+                face_img = faces[0]["face"]
+                
+                thumbnail_path = narrators_dir / f"{uuid.uuid4()}.jpg"
+                cv2.imwrite(str(thumbnail_path), face_img)
+                
+                logger.info(f"Saved face thumbnail: {thumbnail_path}")
+                return str(thumbnail_path)
+            
+        except Exception as e:
+            logger.debug(f"Face extraction failed: {e}")
+        
+        return None
+        
+    except Exception as e:
+        logger.warning(f"Failed to extract face thumbnail: {e}")
+        return None
+
+
 async def create_unknown_narrator(
     db: AsyncSession,
     face_embedding: List[float],
@@ -107,10 +173,12 @@ async def create_unknown_narrator(
     count_result = await db.execute(select(Narrator))
     existing_count = len(count_result.all())
     
+    face_thumbnail_path = await extract_and_save_face_thumbnail(reference_path)
+    
     narrator = Narrator(
         name=f"Unknown #{existing_count + 1}",
         face_embedding=face_embedding,
-        reference_image_path=reference_path,
+        reference_image_path=face_thumbnail_path or reference_path,
         first_seen_at=datetime.utcnow(),
         last_seen_at=datetime.utcnow(),
         narrative_count=1,
@@ -150,10 +218,12 @@ async def register_narrator(
     Returns:
         New Narrator instance
     """
+    face_thumbnail_path = await extract_and_save_face_thumbnail(reference_path)
+    
     narrator = Narrator(
         name=name,
         face_embedding=face_embedding,
-        reference_image_path=reference_path,
+        reference_image_path=face_thumbnail_path or reference_path,
         first_seen_at=datetime.utcnow(),
         last_seen_at=datetime.utcnow(),
         narrative_count=0,
@@ -181,6 +251,8 @@ async def rename_narrator(
     """
     Rename a narrator (e.g., "Unknown #5" → "Mama Fatima").
     
+    Also renumbers subsequent "Unknown #N" narrators to maintain order.
+    
     Args:
         db: Database session
         narrator_id: UUID of narrator
@@ -197,11 +269,43 @@ async def rename_narrator(
     if not narrator:
         return None
     
+    old_name = narrator.name
+    
     narrator.name = new_name
     narrator.named_by_user = True
     await db.flush()
     
+    logger.info(f"Renamed narrator from '{old_name}' to '{new_name}'")
+    
+    await renumber_unknown_narrators(db)
+    
     return narrator
+
+
+async def renumber_unknown_narrators(db: AsyncSession):
+    """
+    Renumber all "Unknown #N" narrators to maintain sequential order.
+    
+    Args:
+        db: Database session
+    """
+    from sqlalchemy import func
+    
+    result = await db.execute(
+        select(Narrator)
+        .where(Narrator.name.like("Unknown #%"))
+        .where(Narrator.named_by_user == False)
+        .order_by(func.cast(func.regexp_replace(Narrator.name, r'[^0-9]', ''), int))
+    )
+    unknown_narrators = result.scalars().all()
+    
+    for index, narrator in enumerate(unknown_narrators, start=1):
+        new_name = f"Unknown #{index}"
+        if narrator.name != new_name:
+            logger.info(f"Renarrating: {narrator.name} → {new_name}")
+            narrator.name = new_name
+    
+    await db.flush()
 
 
 async def get_narrator_with_narratives(
@@ -482,3 +586,61 @@ async def identify_narrator(
         "is_new": not narrator.named_by_user and narrator.name.startswith("Unknown"),
         "narrative_count": narrator.narrative_count
     }
+
+
+async def delete_narrator(
+    db: AsyncSession,
+    narrator_id: str
+) -> Optional[Narrator]:
+    """
+    Soft delete a narrator by setting deleted_at timestamp.
+    
+    Args:
+        db: Database session
+        narrator_id: UUID of narrator to delete
+    
+    Returns:
+        Deleted narrator or None if not found
+    """
+    result = await db.execute(
+        select(Narrator).where(Narrator.id == narrator_id)
+    )
+    narrator = result.scalar_one_or_none()
+    
+    if not narrator:
+        return None
+    
+    narrator.deleted_at = datetime.utcnow()
+    await db.flush()
+    
+    logger.info(f"Soft deleted narrator: {narrator.name}")
+    return narrator
+
+
+async def restore_narrator(
+    db: AsyncSession,
+    narrator_id: str
+) -> Optional[Narrator]:
+    """
+    Restore a soft-deleted narrator by clearing deleted_at timestamp.
+    
+    Args:
+        db: Database session
+        narrator_id: UUID of narrator to restore
+    
+    Returns:
+        Restored narrator or None if not found
+    """
+    result = await db.execute(
+        select(Narrator).where(Narrator.id == narrator_id)
+    )
+    narrator = result.scalar_one_or_none()
+    
+    if not narrator:
+        return None
+    
+    narrator.deleted_at = None
+    await db.flush()
+    
+    logger.info(f"Restored narrator: {narrator.name}")
+    return narrator

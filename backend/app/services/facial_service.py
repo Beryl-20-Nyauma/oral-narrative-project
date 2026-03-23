@@ -123,10 +123,13 @@ class FacialAnalyzer:
                 faces_detected, frames_processed
             )
             
+            face_embedding = cls._extract_face_embedding_from_frames(cap, frames_processed, sample_rate)
+            
             return {
                 "emotion_timeline": emotion_timeline,
                 "expression_timeline": expression_timeline,
                 "narrator_profile": narrator_profile,
+                "face_embedding": face_embedding,
                 "grad_cam_available": True,
                 "grad_cam_path": f"grad_cam_{uuid.uuid4().hex[:8]}.png",
                 "analysis_metadata": {
@@ -214,6 +217,65 @@ class FacialAnalyzer:
         except Exception as e:
             logger.warning(f"Unexpected error analyzing frame at {timestamp:.2f}s: {e}")
             return None
+    
+    @classmethod
+    def _extract_face_embedding_from_frames(
+        cls,
+        cap,
+        total_frames: int,
+        sample_rate: float
+    ) -> Optional[List[float]]:
+        """
+        Extract face embedding from video frames.
+        
+        Samples frames at 10%, 30%, 50%, 70%, 90% and uses
+        the most confident face detection for embedding.
+        
+        Args:
+            cap: OpenCV VideoCapture object
+            total_frames: Total number of frames in video
+            sample_rate: Frames per second sampling rate
+        
+        Returns:
+            512-dim face embedding vector or None if no face found
+        """
+        from deepface import DeepFace
+        
+        fps = cap.get(cv2.CAP_PROP_FPS) if cap.isOpened() else 30
+        sample_frames = [int(total_frames * p) for p in [0.1, 0.3, 0.5, 0.7, 0.9]]
+        
+        best_embedding = None
+        best_confidence = 0
+        
+        for frame_idx in sample_frames:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+            ret, frame = cap.read()
+            if not ret:
+                continue
+            
+            try:
+                embedding_objs = DeepFace.represent(
+                    frame,
+                    enforce_detection=False,
+                    detector_backend=DETECTOR_BACKEND
+                )
+                
+                if embedding_objs:
+                    embedding = embedding_objs[0]["embedding"]
+                    confidence = embedding_objs[0].get("face_confidence", 0.5)
+                    
+                    if confidence > best_confidence:
+                        best_confidence = confidence
+                        best_embedding = embedding
+                        
+            except Exception as e:
+                logger.debug(f"Frame {frame_idx} embedding extraction failed: {e}")
+                continue
+        
+        if best_embedding:
+            logger.info(f"Extracted face embedding (confidence: {best_confidence:.2f})")
+        
+        return best_embedding
     
     @classmethod
     def _build_narrator_profile(
@@ -338,7 +400,7 @@ class FacialAnalyzer:
         }
 
 
-def analyze_facial_features(video_path: str) -> Dict[str, Any]:
+def analyze_facial_features(video_path: str, fallback_on_error: bool = True) -> Dict[str, Any]:
     """
     Analyze facial features from video.
     
@@ -346,8 +408,47 @@ def analyze_facial_features(video_path: str) -> Dict[str, Any]:
     
     Args:
         video_path: Path to video file
+        fallback_on_error: If True, return empty data on error instead of raising
     
     Returns:
         Dict with emotion_timeline, expression_timeline, narrator_profile
+    
+    Raises:
+        FileNotFoundError: If fallback_on_error is False and file not found
+        ValueError: If fallback_on_error is False and video cannot be opened
     """
-    return FacialAnalyzer.analyze_video(video_path)
+    try:
+        return FacialAnalyzer.analyze_video(video_path)
+    except FileNotFoundError as e:
+        logger.warning(f"Video file not found: {video_path}")
+        if fallback_on_error:
+            return _get_empty_facial_result()
+        raise
+    except ValueError as e:
+        logger.error(f"Cannot open video {video_path}: {e}")
+        if fallback_on_error:
+            return _get_empty_facial_result()
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error analyzing video {video_path}: {e}")
+        if fallback_on_error:
+            return _get_empty_facial_result()
+        raise RuntimeError(f"Facial analysis failed: {e}") from e
+
+
+def _get_empty_facial_result() -> Dict[str, Any]:
+    """Return empty facial analysis result for error cases."""
+    return {
+        "emotion_timeline": [],
+        "expression_timeline": [],
+        "narrator_profile": FacialAnalyzer._empty_profile(0),
+        "grad_cam_available": False,
+        "grad_cam_path": None,
+        "analysis_metadata": {
+            "frames_processed": 0,
+            "frames_with_faces": 0,
+            "sample_rate": 1.0,
+            "detector_backend": DETECTOR_BACKEND,
+            "error": True,
+        }
+    }

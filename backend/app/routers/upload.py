@@ -1,10 +1,11 @@
 """API route handlers for upload."""
 
-from fastapi import APIRouter, UploadFile, File, Depends
+from fastapi import APIRouter, UploadFile, File, Depends, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 
 from app.core.database import get_db
+from app.routers.auth import require_auth
 
 router = APIRouter(prefix="/api/narratives", tags=["upload"])
 
@@ -12,12 +13,13 @@ router = APIRouter(prefix="/api/narratives", tags=["upload"])
 @router.post("/upload")
 async def upload_narrative(
     video: UploadFile = File(...),
-    title: str = "Untitled Narrative",
-    narrator_name: str = "Anonymous",
-    location: str = "",
-    language: str = "en",
-    themes: str = "",
-    transcript: str = "",
+    title: str = Form(default="Untitled Narrative"),
+    narrator_name: str = Form(default="Anonymous"),
+    location: str = Form(default=""),
+    language: str = Form(default="en"),
+    themes: str = Form(default=""),
+    transcript: str = Form(default=""),
+    current_user: dict = Depends(require_auth),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -54,6 +56,7 @@ async def upload_narrative(
 @router.post("/retry/{narrative_id}")
 async def retry_processing(
     narrative_id: str,
+    current_user: dict = Depends(require_auth),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """

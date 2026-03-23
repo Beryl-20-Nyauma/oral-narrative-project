@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard — Oral Narrative Preservation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@300;400&family=Crimson+Pro:ital,wght=0,300;0,400;1,300&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">
+    <span></span>
+    <a href="index.html" style="color:inherit;text-decoration:none;">Oral Narrative</a>
+  </div>
+  <ul class="nav-links">
+    <li><a href="index.html#archive">Archive</a></li>
+    <li><a href="index.html#upload">Record</a></li>
+    <li><a href="narrators.html">Narrators</a></li>
+    <li id="auth-container"></li>
+  </ul>
+</nav>
+
+<main style="padding-top:6rem;">
+  <section>
+    <div class="section-header">
+      <h2 class="section-title">Admin Dashboard</h2>
+      <span class="section-count" id="dashboardStatus">System Status</span>
+    </div>
+    
+    <div class="admin-grid">
+      <div class="admin-card">
+        <h3>System Health</h3>
+        <div id="healthStatus" class="admin-status loading">Checking...</div>
+        <div id="healthDetails" class="admin-details"></div>
+      </div>
+      
+      <div class="admin-card">
+        <h3>GPU Status</h3>
+        <div id="gpuStatus" class="admin-status loading">Checking...</div>
+        <div id="gpuDetails" class="admin-details"></div>
+      </div>
+      
+      <div class="admin-card">
+        <h3>Processing Queue</h3>
+        <div id="queueStatus" class="admin-status loading">Checking...</div>
+        <div id="queueDetails" class="admin-details"></div>
+      </div>
+    </div>
+    
+    <div class="admin-section">
+      <h3>Performance Benchmarks</h3>
+      <div id="benchmarkResults" class="benchmark-grid">
+        <div class="loading-state" style="grid-column:1/-1;text-align:center;padding:2rem;">
+          <div style="font-family:'DM Mono',monospace;color:var(--mid);font-size:0.8rem;">Running benchmarks...</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="admin-section">
+      <h3>Statistics</h3>
+      <div id="statsResults" class="stats-grid">
+        <div class="loading-state" style="grid-column:1/-1;text-align:center;padding:2rem;">
+          <div style="font-family:'DM Mono',monospace;color:var(--mid);font-size:0.8rem;">Loading statistics...</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+let healthData = null;
+let queueData = null;
+let statsData = null;
+let benchmarkData = null;
+
+async function loadAdminData() {
+  await Promise.all([
+    loadHealth(),
+    loadStats(),
+    loadBenchmarks(),
+    loadQueue()
+  ]);
+}
+
+async function loadHealth() {
+  try {
+    healthData = await API.stats.health();
+    renderHealthStatus();
+  } catch (error) {
+    console.error('Failed to load health:', error);
+    renderHealthError(error);
+  }
+}
+
+async function loadStats() {
+  try {
+    statsData = await API.stats.get();
+    renderStats();
+  } catch (error) {
+    console.error('Failed to load stats:', error);
+    renderStatsError(error);
+  }
+}
+
+async function loadBenchmarks() {
+  try {
+    benchmarkData = await API.stats.benchmark();
+    renderBenchmarks();
+  } catch (error) {
+    console.error('Failed to load benchmarks:', error);
+    renderBenchmarksError(error);
+  }
+}
+
+async function loadQueue() {
+  try {
+    queueData = await API.queue.status();
+    renderQueue();
+  } catch (error) {
+    console.error('Failed to load queue:', error);
+    renderQueueError(error);
+  }
+}
+
+function renderHealthStatus() {
+  const statusEl = document.getElementById('healthStatus');
+  const detailsEl = document.getElementById('healthDetails');
+  
+  if (healthData && healthData.status === 'healthy') {
+    statusEl.textContent = '● Healthy';
+    statusEl.className = 'admin-status healthy';
+    
+    const system = healthData.system || {};
+    detailsEl.innerHTML = `
+      <div>CPU: ${system.cpu_percent ? system.cpu_percent.toFixed(1) : 'N/A'}%</div>
+      <div>Memory: ${system.memory_percent ? system.memory_percent.toFixed(1) : 'N/A'}%</div>
+      <div>Disk: ${system.disk_percent ? system.disk_percent.toFixed(1) : 'N/A'}%</div>
+    `;
+    
+    renderGpuStatus(healthData.gpu);
+  } else {
+    statusEl.textContent = '● Issues';
+    statusEl.className = 'admin-status error';
+    detailsEl.innerHTML = '<div>System health issues detected</div>';
+  }
+}
+
+function renderGpuStatus(gpu) {
+  const statusEl = document.getElementById('gpuStatus');
+  const detailsEl = document.getElementById('gpuDetails');
+  
+  if (gpu && gpu.available) {
+    statusEl.textContent = '● Available';
+    statusEl.className = 'admin-status healthy';
+    detailsEl.innerHTML = `
+      <div>${gpu.name || 'GPU'}</div>
+      <div>Memory: ${gpu.memory_used || 0}/${gpu.memory_total || 0} MB</div>
+    `;
+  } else {
+    statusEl.textContent = '● Not Available';
+    statusEl.className = 'admin-status warning';
+    detailsEl.innerHTML = '<div>Running on CPU</div>';
+  }
+}
+
+function renderHealthError(error) {
+  const statusEl = document.getElementById('healthStatus');
+  const detailsEl = document.getElementById('healthDetails');
+  statusEl.textContent = '● Error';
+  statusEl.className = 'admin-status error';
+  detailsEl.innerHTML = `<div>${error.message}</div>`;
+  
+  document.getElementById('gpuStatus').textContent = '● Unknown';
+  document.getElementById('gpuStatus').className = 'admin-status warning';
+  document.getElementById('gpuDetails').innerHTML = '<div>Unable to check</div>';
+}
+
+function renderQueue() {
+  const statusEl = document.getElementById('queueStatus');
+  const detailsEl = document.getElementById('queueDetails');
+  
+  if (queueData) {
+    const activeCount = queueData.active_tasks || 0;
+    const workerCount = queueData.worker_count || 0;
+    
+    statusEl.textContent = activeCount > 0 ? `● Active (${activeCount})` : '● Idle';
+    statusEl.className = activeCount > 0 ? 'admin-status warning' : 'admin-status healthy';
+    
+    detailsEl.innerHTML = `
+      <div>Workers: ${workerCount}</div>
+      <div>Reserved: ${queueData.reserved_tasks || 0}</div>
+    `;
+  }
+}
+
+function renderQueueError(error) {
+  const statusEl = document.getElementById('queueStatus');
+  const detailsEl = document.getElementById('queueDetails');
+  statusEl.textContent = '● Unavailable';
+  statusEl.className = 'admin-status warning';
+  detailsEl.innerHTML = '<div>Celery not running</div>';
+}
+
+function renderStats() {
+  const container = document.getElementById('statsResults');
+  
+  if (statsData) {
+    container.innerHTML = `
+      <div class="stat-item">
+        <div class="label">Narratives</div>
+        <div class="value">${statsData.total_narratives || statsData.narrative_count || 0}</div>
+        <div class="unit">total</div>
+      </div>
+      <div class="stat-item">
+        <div class="label">Narrators</div>
+        <div class="value">${statsData.unique_narrators || statsData.narrator_count || 0}</div>
+        <div class="unit">unique</div>
+      </div>
+      <div class="stat-item">
+        <div class="label">Avg Duration</div>
+        <div class="value">${Math.round(statsData.avg_duration_sec || statsData.avg_duration || 0)}</div>
+        <div class="unit">seconds</div>
+      </div>
+      <div class="stat-item">
+        <div class="label">Processing</div>
+        <div class="value">${statsData.processing_count || statsData.pending || 0}</div>
+        <div class="unit">in queue</div>
+      </div>
+      <div class="stat-item">
+        <div class="label">Complete</div>
+        <div class="value">${statsData.complete_count || statsData.completed || 0}</div>
+        <div class="unit">analyzed</div>
+      </div>
+      <div class="stat-item">
+        <div class="label">Failed</div>
+        <div class="value">${statsData.failed_count || statsData.failed || 0}</div>
+        <div class="unit">errors</div>
+      </div>
+    `;
+  }
+}
+
+function renderStatsError(error) {
+  const container = document.getElementById('statsResults');
+  container.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--terracotta);">Failed to load: ${error.message}</div>`;
+}
+
+function renderBenchmarks() {
+  const container = document.getElementById('benchmarkResults');
+  
+  if (benchmarkData) {
+    const items = [];
+    
+    const benchmarks = [
+      { key: 'database', label: 'Database Query' },
+      { key: 'redis', label: 'Redis Ping' },
+      { key: 'facial_analysis', label: 'Facial Analysis' },
+      { key: 'audio_analysis', label: 'Audio Analysis' },
+      { key: 'transcription', label: 'Transcription' },
+      { key: 'fusion', label: 'Multimodal Fusion' }
+    ];
+    
+    for (const bm of benchmarks) {
+      if (benchmarkData[bm.key]) {
+        items.push({
+          label: bm.label,
+          value: benchmarkData[bm.key].avg_time || benchmarkData[bm.key].time || 0,
+          unit: 'ms'
+        });
+      }
+    }
+    
+    if (items.length === 0) {
+      container.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--mid);">No benchmark data available</div>';
+      return;
+    }
+    
+    container.innerHTML = items.map(item => `
+      <div class="benchmark-item">
+        <div class="label">${item.label}</div>
+        <div class="value">${typeof item.value === 'number' ? item.value.toFixed(1) : item.value}</div>
+        <div class="unit">${item.unit}</div>
+      </div>
+    `).join('');
+  }
+}
+
+function renderBenchmarksError(error) {
+  const container = document.getElementById('benchmarkResults');
+  container.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--terracotta);">Failed to run benchmarks: ${error.message}</div>`;
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await Auth.fetchCurrentUser();
+  
+  if (!checkAdminAccess()) {
+    return;
+  }
+  
+  await loadAdminData();
+  
+  setInterval(loadAdminData, 30000);
+});
+</script>
+</body>
+</html>

@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any, Optional, List
 
 from app.core.database import get_db
+from app.routers.auth import require_auth, require_admin
 
 router = APIRouter(prefix="/api/narrators", tags=["narrators"])
 
@@ -55,7 +56,8 @@ async def get_narrator(
 @router.patch("/{narrator_id}")
 async def rename_narrator(
     narrator_id: str,
-    name: str,
+    name: str = Form(...),
+    current_user: dict = Depends(require_auth),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -83,8 +85,9 @@ async def rename_narrator(
 
 @router.post("/register")
 async def register_narrator(
-    name: str,
+    name: str = Form(...),
     reference_image: UploadFile = File(...),
+    current_user: dict = Depends(require_auth),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -168,6 +171,7 @@ async def identify_narrator(
     video: Optional[UploadFile] = File(None),
     image: Optional[UploadFile] = File(None),
     confidence_threshold: float = Form(0.85),
+    current_user: dict = Depends(require_auth),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -240,6 +244,7 @@ async def identify_narrator(
 
 @router.post("/rebuild-index")
 async def rebuild_faiss_index(
+    current_user: dict = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -259,4 +264,36 @@ async def rebuild_faiss_index(
         "success": True,
         "narrators_indexed": count,
         "message": f"FAISS index rebuilt with {count} narrators"
+    }
+
+
+@router.delete("/{narrator_id}")
+async def delete_narrator(
+    narrator_id: str,
+    current_user: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Soft delete a narrator (Admin only).
+    
+    Args:
+        narrator_id: UUID of narrator to delete
+        current_user: Current authenticated admin user
+        db: Database session
+    
+    Returns:
+        Success message
+    """
+    from app.services.narrator_service import delete_narrator as _delete_narrator
+    
+    narrator = await _delete_narrator(db, narrator_id)
+    
+    if not narrator:
+        raise HTTPException(status_code=404, detail="Narrator not found")
+    
+    await db.commit()
+    
+    return {
+        "success": True,
+        "message": f"Narrator '{narrator.name}' has been deleted (soft delete)"
     }

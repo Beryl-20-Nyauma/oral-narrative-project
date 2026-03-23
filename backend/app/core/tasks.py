@@ -107,6 +107,14 @@ async def _process_video_async(
                 results["stages_failed"].append("facial_analysis")
                 results["warnings"].append("No face detected in video")
             
+            progress.update(25, "identifying_narrator")
+            narrator_identified = await _identify_narrator(db, narrative, facial_data, video_path)
+            if narrator_identified:
+                results["stages_completed"].append("narrator_identification")
+            else:
+                results["stages_failed"].append("narrator_identification")
+                results["warnings"].append("Narrator identification failed")
+            
             progress.update(40, "analyzing_audio")
             audio_data = await _analyze_audio(audio_path, results)
             if audio_data:
@@ -225,6 +233,58 @@ async def _analyze_facial(video_path: str, results: Dict) -> Optional[Dict]:
     except Exception as e:
         logger.warning(f"Facial analysis failed: {e}")
         return None
+
+
+async def _identify_narrator(
+    db: AsyncSession,
+    narrative: Narrative,
+    facial_data: Optional[Dict],
+    video_path: str
+) -> bool:
+    """
+    Identify narrator from facial analysis or create new one.
+    
+    Args:
+        db: Database session
+        narrative: Narrative object to update
+        facial_data: Facial analysis results
+        video_path: Path to video file
+    
+    Returns:
+        True if narrator was identified/created, False otherwise
+    """
+    if not facial_data:
+        return False
+    
+    face_embedding = facial_data.get("face_embedding")
+    if not face_embedding:
+        return False
+    
+    try:
+        from app.services.narrator_service import (
+            identify_or_create_narrator
+        )
+        
+        narrator, confidence = await identify_or_create_narrator(
+            db=db,
+            face_embedding=face_embedding,
+            video_path=video_path,
+            confidence_threshold=0.75,
+            use_faiss=True
+        )
+        
+        if narrator:
+            narrative.narrator_id = narrator.id
+            narrative.narrator_name = narrator.name
+            narrative.narrator_match_confidence = confidence
+            logger.info(f"Identified narrator: {narrator.name} (confidence: {confidence:.2f})")
+            return True
+        
+        return False
+        
+    except Exception as e:
+        logger.warning(f"Narrator identification failed: {e}")
+        return False
 
 
 async def _analyze_audio(audio_path: str, results: Dict) -> Optional[Dict]:

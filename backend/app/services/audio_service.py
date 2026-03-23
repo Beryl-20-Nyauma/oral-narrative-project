@@ -20,53 +20,103 @@ def extract_audio_from_video(video_path: str, output_path: str) -> str:
     
     Returns:
         Path to extracted audio file
+    
+    Raises:
+        FileNotFoundError: If video file doesn't exist
+        RuntimeError: If FFmpeg extraction fails
     """
+    video_path_obj = Path(video_path)
+    if not video_path_obj.exists():
+        raise FileNotFoundError(f"Video file not found: {video_path}")
+    
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     
-    subprocess.run([
-        'ffmpeg', '-y', '-i', video_path,
-        '-vn', '-acodec', 'pcm_s16le',
-        '-ar', '44100', '-ac', '1',
-        output_path
-    ], check=True, capture_output=True)
-    
-    logger.info(f"Extracted audio to: {output_path}")
-    return output_path
+    try:
+        result = subprocess.run([
+            'ffmpeg', '-y', '-i', video_path,
+            '-vn', '-acodec', 'pcm_s16le',
+            '-ar', '44100', '-ac', '1',
+            output_path
+        ], check=True, capture_output=True, text=True)
+        
+        logger.info(f"Extracted audio to: {output_path}")
+        return output_path
+    except subprocess.CalledProcessError as e:
+        logger.error(f"FFmpeg audio extraction failed: {e.stderr}")
+        raise RuntimeError(f"Failed to extract audio from video: {e.stderr}") from e
+    except FileNotFoundError:
+        logger.error("FFmpeg not found. Please install FFmpeg.")
+        raise RuntimeError("FFmpeg not installed")
 
 
-def analyze_audio_features(audio_path: str) -> Dict[str, Any]:
+def analyze_audio_features(audio_path: str, fallback_on_error: bool = True) -> Dict[str, Any]:
     """
     Extract vocal features using Librosa.
     
     Args:
         audio_path: Path to audio file (WAV preferred)
+        fallback_on_error: If True, return empty data on error instead of raising
     
     Returns:
         Dict with voice_activity_segments, pitch_timeline, vocal_features, audio_quality
+    
+    Raises:
+        FileNotFoundError: If fallback_on_error is False and file not found
     """
-    logger.info(f"Starting audio analysis: {audio_path}")
+    audio_path_obj = Path(audio_path)
+    if not audio_path_obj.exists():
+        logger.warning(f"Audio file not found: {audio_path}")
+        if fallback_on_error:
+            return _get_empty_audio_result()
+        raise FileNotFoundError(f"Audio file not found: {audio_path}")
     
-    y, sr = librosa.load(audio_path, sr=None)
-    duration = len(y) / sr
-    
-    f0, voiced_flags, voiced_probs = librosa.pyin(
-        y, fmin=librosa.note_to_hz('C2'),
-        fmax=librosa.note_to_hz('C7'),
-        sr=sr
-    )
-    
-    voice_activity = _detect_voice_activity(y, sr)
-    pitch_timeline = _build_pitch_timeline(f0, sr)
-    vocal_features = _extract_vocal_features(y, sr, f0, voiced_flags, duration)
-    audio_quality = _assess_audio_quality(y, sr)
-    
-    logger.info(f"Audio analysis complete: {duration:.1f}s, {vocal_features['speech_rate_wpm']} WPM")
-    
+    try:
+        logger.info(f"Starting audio analysis: {audio_path}")
+        
+        y, sr = librosa.load(audio_path, sr=None)
+        duration = len(y) / sr
+        
+        f0, voiced_flags, voiced_probs = librosa.pyin(
+            y, fmin=librosa.note_to_hz('C2'),
+            fmax=librosa.note_to_hz('C7'),
+            sr=sr
+        )
+        
+        voice_activity = _detect_voice_activity(y, sr)
+        pitch_timeline = _build_pitch_timeline(f0, sr)
+        vocal_features = _extract_vocal_features(y, sr, f0, voiced_flags, duration)
+        audio_quality = _assess_audio_quality(y, sr)
+        
+        logger.info(f"Audio analysis complete: {duration:.1f}s, {vocal_features['speech_rate_wpm']} WPM")
+        
+        return {
+            "voice_activity_segments": voice_activity,
+            "pitch_timeline": pitch_timeline,
+            "vocal_features": vocal_features,
+            "audio_quality": audio_quality
+        }
+    except Exception as e:
+        logger.error(f"Audio analysis failed for {audio_path}: {e}")
+        if fallback_on_error:
+            return _get_empty_audio_result()
+        raise RuntimeError(f"Audio analysis failed: {e}") from e
+
+
+def _get_empty_audio_result() -> Dict[str, Any]:
+    """Return empty audio analysis result for error cases."""
     return {
-        "voice_activity_segments": voice_activity,
-        "pitch_timeline": pitch_timeline,
-        "vocal_features": vocal_features,
-        "audio_quality": audio_quality
+        "voice_activity_segments": [],
+        "pitch_timeline": [],
+        "vocal_features": {
+            "mean_pitch_hz": 0,
+            "pitch_range_hz": {"min": 0, "max": 0},
+            "pitch_variability_std": 0,
+            "speech_rate_wpm": 0,
+            "pause_count": 0,
+            "mean_pause_duration_sec": 0,
+            "vocal_emotion_indicators": {"arousal": 0, "valence": 0, "dominance": 0},
+        },
+        "audio_quality": {"sample_rate": 44100, "snr_db": 0},
     }
 
 
